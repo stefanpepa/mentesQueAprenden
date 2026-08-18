@@ -17,7 +17,7 @@ router.get('/', requireAuth, async (req, res) => {
     .select(`
       id, fecha_inicio, fecha_fin, estado, tipo, notas, recordatorio_enviado,
       paciente:pacientes(id, nombre, apellido, telefono),
-      profesional:profesionales(id, nombre, apellido, especialidad),
+      profesional:profesionales!profesional_id(id, nombre, apellido, especialidad),
       sesion:sesiones(id)
     `)
     .order('fecha_inicio', { ascending: true });
@@ -52,7 +52,7 @@ router.post('/',
       .select(`
         *,
         paciente:pacientes(id, nombre, apellido, telefono),
-        profesional:profesionales(id, nombre, apellido)
+        profesional:profesionales!profesional_id(id, nombre, apellido)
       `)
       .single();
 
@@ -97,7 +97,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 router.post('/:id/recordatorio', requireAuth, async (req, res) => {
   const { data: turno, error } = await supabaseAdmin
     .from('turnos')
-    .select('*, paciente:pacientes(nombre, apellido, telefono), profesional:profesionales(nombre, apellido)')
+    .select('*, paciente:pacientes(nombre, apellido, telefono), profesional:profesionales!profesional_id(nombre, apellido)')
     .eq('id', req.params.id)
     .single();
 

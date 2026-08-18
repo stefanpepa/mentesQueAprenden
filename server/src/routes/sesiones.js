@@ -18,7 +18,7 @@ router.get('/:id',
       .select(`
         *,
         paciente:pacientes(id, nombre, apellido, dni, fecha_nacimiento),
-        profesional:profesionales(id, nombre, apellido, especialidad)
+        profesional:profesionales!profesional_id(id, nombre, apellido, especialidad)
       `)
       .eq('id', req.params.id)
       .single();

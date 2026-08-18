@@ -59,7 +59,7 @@ export default function PagosPage() {
           type="month"
           value={mes}
           onChange={(e) => setMes(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
       </div>
 
@@ -119,7 +119,7 @@ export default function PagosPage() {
               </p>
               <button
                 onClick={() => setModalPagar(sesion)}
-                className="flex-shrink-0 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-medium"
+                className="flex-shrink-0 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-medium"
               >
                 Cobrar
               </button>
@@ -164,14 +164,14 @@ export default function PagosPage() {
               <Printer size={15} /> Imprimir / Guardar PDF
             </button>
           </div>
-          <div className="bg-teal-50 rounded-2xl border border-teal-100 p-4 flex items-center justify-between">
+          <div className="bg-primary-50 rounded-2xl border border-primary-100 p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-teal-600 font-medium">Total espacio — {mes}</p>
-              <p className="text-2xl font-bold text-teal-900">${liquidacion.total_espacio?.toLocaleString('es-AR')}</p>
+              <p className="text-sm text-primary-600 font-medium">Total espacio — {mes}</p>
+              <p className="text-2xl font-bold text-primary-900">${liquidacion.total_espacio?.toLocaleString('es-AR')}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-teal-500">Total facturado</p>
-              <p className="text-lg font-bold text-teal-700">${liquidacion.total_facturado?.toLocaleString('es-AR')}</p>
+              <p className="text-xs text-primary-500">Total facturado</p>
+              <p className="text-lg font-bold text-primary-700">${liquidacion.total_facturado?.toLocaleString('es-AR')}</p>
             </div>
           </div>
 
@@ -192,9 +192,9 @@ export default function PagosPage() {
                   <p className="text-xs text-green-600">A pagar</p>
                   <p className="font-semibold text-sm text-green-700">${Number(prof.total_profesional).toLocaleString('es-AR')}</p>
                 </div>
-                <div className="bg-teal-50 rounded-xl p-2">
-                  <p className="text-xs text-teal-600">Espacio</p>
-                  <p className="font-semibold text-sm text-teal-700">${Number(prof.total_espacio).toLocaleString('es-AR')}</p>
+                <div className="bg-primary-50 rounded-xl p-2">
+                  <p className="text-xs text-primary-600">Espacio</p>
+                  <p className="font-semibold text-sm text-primary-700">${Number(prof.total_espacio).toLocaleString('es-AR')}</p>
                 </div>
               </div>
             </div>
@@ -215,7 +215,7 @@ export default function PagosPage() {
               <select
                 value={metodoPago}
                 onChange={(e) => setMetodoPago(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {Object.entries(METODO_LABEL).map(([v, l]) => (
                   <option key={v} value={v}>{l}</option>

@@ -141,7 +141,7 @@ export default function AgendaPage() {
             <select
               value={filtroProf}
               onChange={(e) => setFiltroProf(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">Todos los profesionales</option>
               {profesionales?.map(p => (
@@ -151,7 +151,7 @@ export default function AgendaPage() {
           )}
           <button
             onClick={() => { setNuevaFecha(format(new Date(), 'yyyy-MM-dd')); setModalNuevo(true); }}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
           >
             <Plus size={16} /> Nuevo turno
           </button>
@@ -209,7 +209,7 @@ export default function AgendaPage() {
                 value={nuevaFecha}
                 onChange={(e) => setNuevaFecha(e.target.value)}
                 required
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -219,7 +219,7 @@ export default function AgendaPage() {
                 value={nuevaHora}
                 onChange={(e) => setNuevaHora(e.target.value)}
                 required
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -231,7 +231,7 @@ export default function AgendaPage() {
               value={formData.duracion}
               onChange={(e) => setFormData(p => ({ ...p, duracion: e.target.value }))}
               min={15} max={480} step={5}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -240,7 +240,7 @@ export default function AgendaPage() {
             <select
               value={formData.paciente_id}
               onChange={(e) => setFormData(p => ({ ...p, paciente_id: e.target.value }))}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">Sin paciente asignado</option>
               {pacientes?.map(p => (
@@ -254,7 +254,7 @@ export default function AgendaPage() {
             <select
               value={formData.tipo}
               onChange={(e) => setFormData(p => ({ ...p, tipo: e.target.value }))}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -266,7 +266,7 @@ export default function AgendaPage() {
               value={formData.notas}
               onChange={(e) => setFormData(p => ({ ...p, notas: e.target.value }))}
               rows={2}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
             />
           </div>
 
@@ -276,7 +276,7 @@ export default function AgendaPage() {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setModalNuevo(false)} className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700">Cancelar</button>
-            <button type="submit" disabled={crearMutation.isPending} className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium">
+            <button type="submit" disabled={crearMutation.isPending} className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium">
               {crearMutation.isPending ? 'Guardando...' : 'Crear turno'}
             </button>
           </div>
@@ -322,7 +322,7 @@ export default function AgendaPage() {
                 <button
                   onClick={() => recordatorioMutation.mutate(modalDetalle.id)}
                   disabled={recordatorioMutation.isPending || modalDetalle.recordatorio_enviado}
-                  className="flex items-center gap-2 flex-1 justify-center py-2.5 border border-teal-200 text-teal-600 hover:bg-teal-50 rounded-xl text-sm font-medium disabled:opacity-50"
+                  className="flex items-center gap-2 flex-1 justify-center py-2.5 border border-primary-200 text-primary-600 hover:bg-primary-50 rounded-xl text-sm font-medium disabled:opacity-50"
                 >
                   <Send size={14} />
                   {modalDetalle.recordatorio_enviado ? 'Recordatorio enviado' : 'Enviar recordatorio'}
@@ -331,7 +331,7 @@ export default function AgendaPage() {
               {modalDetalle.paciente_id && (
                 <a
                   href={`/sesiones/nueva?paciente_id=${modalDetalle.paciente_id}&turno_id=${modalDetalle.id}`}
-                  className="flex-1 text-center py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-medium"
+                  className="flex-1 text-center py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium"
                 >
                   Registrar sesión
                 </a>

@@ -87,7 +87,7 @@ export default function PacienteDetallePage() {
         </h1>
         <Link
           to={`/pacientes/${id}/editar`}
-          className="text-sm text-teal-600 hover:text-teal-700 font-medium px-3 py-1.5 border border-teal-200 rounded-xl"
+          className="text-sm text-primary-600 hover:text-primary-700 font-medium px-3 py-1.5 border border-primary-200 rounded-xl"
         >
           Editar
         </Link>
@@ -96,8 +96,8 @@ export default function PacienteDetallePage() {
       {/* Card resumen */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 mb-4">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-            <span className="text-teal-700 font-bold text-lg">
+          <div className="w-14 h-14 bg-primary-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+            <span className="text-primary-700 font-bold text-lg">
               {paciente.nombre[0]}{paciente.apellido[0]}
             </span>
           </div>
@@ -128,13 +128,13 @@ export default function PacienteDetallePage() {
         {/* Contacto */}
         <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-3">
           {paciente.telefono && (
-            <a href={`tel:${paciente.telefono}`} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-teal-600">
+            <a href={`tel:${paciente.telefono}`} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-primary-600">
               <Phone size={15} />
               {paciente.telefono}
             </a>
           )}
           {paciente.email && (
-            <a href={`mailto:${paciente.email}`} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-teal-600">
+            <a href={`mailto:${paciente.email}`} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-primary-600">
               <Mail size={15} />
               {paciente.email}
             </a>
@@ -157,7 +157,7 @@ export default function PacienteDetallePage() {
       <div className="flex gap-2 mb-4">
         <Link
           to={`/sesiones/nueva?paciente_id=${id}`}
-          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-1 justify-center"
+          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-1 justify-center"
         >
           <Plus size={16} />
           Nueva sesión
@@ -210,7 +210,7 @@ export default function PacienteDetallePage() {
                     <span className="font-medium text-gray-900">
                       {format(new Date(sesion.fecha), "d 'de' MMMM yyyy", { locale: es })}
                     </span>
-                    <span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
                       {TIPO_SESION_LABEL[sesion.tipo]}
                     </span>
                     {sesion.pagado ? (
@@ -223,7 +223,7 @@ export default function PacienteDetallePage() {
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">{sesion.notas_libres}</p>
                   )}
                   {sesion.resumen_ia && (
-                    <p className="text-xs text-teal-500 mt-1 italic">IA: {sesion.resumen_ia.slice(0, 80)}...</p>
+                    <p className="text-xs text-primary-500 mt-1 italic">IA: {sesion.resumen_ia.slice(0, 80)}...</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -307,7 +307,7 @@ export default function PacienteDetallePage() {
                   {['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(arch.mime_type) && (
                     <button
                       onClick={() => setModalPDF({ arch, analisis: null })}
-                      className="flex items-center gap-1 text-teal-500 hover:text-teal-700 text-xs font-medium px-2 py-1 border border-teal-100 rounded-lg hover:bg-teal-50"
+                      className="flex items-center gap-1 text-primary-500 hover:text-primary-700 text-xs font-medium px-2 py-1 border border-primary-100 rounded-lg hover:bg-primary-50"
                       title="Analizar con IA (Gemini)"
                     >
                       <Sparkles size={12} /> IA
@@ -315,7 +315,7 @@ export default function PacienteDetallePage() {
                   )}
                   <a
                     href="#"
-                    className="text-teal-600 hover:text-teal-700 text-sm font-medium"
+                    className="text-primary-600 hover:text-primary-700 text-sm font-medium"
                     onClick={async (e) => {
                       e.preventDefault();
                       const res = await api.get(`/archivos/${arch.id}/download-url`);
@@ -339,15 +339,15 @@ export default function PacienteDetallePage() {
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2">
               <Paperclip size={14} className="text-gray-400" />
               <span className="truncate font-medium">{modalPDF.arch.nombre_original}</span>
-              <span className="ml-auto text-xs text-teal-500 font-medium">Gemini Flash</span>
+              <span className="ml-auto text-xs text-primary-500 font-medium">Gemini Flash</span>
             </div>
 
             {modalPDF.analisis ? (
-              <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                <p className="text-xs font-medium text-teal-600 mb-2 flex items-center gap-1">
+              <div className="bg-primary-50 border border-primary-100 rounded-xl p-4">
+                <p className="text-xs font-medium text-primary-600 mb-2 flex items-center gap-1">
                   <Sparkles size={12} /> Análisis de Gemini
                 </p>
-                <p className="text-sm text-teal-900 leading-relaxed whitespace-pre-wrap">{modalPDF.analisis}</p>
+                <p className="text-sm text-primary-900 leading-relaxed whitespace-pre-wrap">{modalPDF.analisis}</p>
               </div>
             ) : (
               <p className="text-sm text-gray-500">Gemini leerá el documento y extraerá la información clínica relevante.</p>
@@ -360,7 +360,7 @@ export default function PacienteDetallePage() {
               <input
                 value={preguntaPDF}
                 onChange={(e) => setPreguntaPDF(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Ej: ¿Cuál es el diagnóstico principal? ¿Qué medicación indica?"
               />
             </div>
@@ -376,7 +376,7 @@ export default function PacienteDetallePage() {
               <button
                 onClick={() => analizarPDFMutation.mutate({ archivo_id: modalPDF.arch.id, pregunta: preguntaPDF || undefined })}
                 disabled={analizarPDFMutation.isPending}
-                className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 {analizarPDFMutation.isPending ? (
                   <><Loader size={14} className="animate-spin" /> Analizando...</>

@@ -16,9 +16,9 @@ const openrouter = new OpenAI({
   }
 });
 
-const MODELO_TEXTO = 'google/gemma-4-31b-it:free';
-const MODELO_PDF   = 'google/gemini-2.0-flash-exp:free';
-const MODELO_CHAT  = 'google/gemma-4-31b-it:free';
+const MODELO_TEXTO = 'google/gemma-4-26b-a4b-it:free';
+const MODELO_PDF   = 'google/gemma-4-26b-a4b-it:free';
+const MODELO_CHAT  = 'google/gemma-4-26b-a4b-it:free';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -109,7 +109,7 @@ router.post('/resumir-sesion',
 
     const { data: sesion } = await supabaseAdmin
       .from('sesiones')
-      .select('tipo, paciente:pacientes(fecha_nacimiento), profesional:profesionales(especialidad)')
+      .select('tipo, paciente:pacientes(fecha_nacimiento), profesional:profesionales!profesional_id(especialidad)')
       .eq('id', sesion_id)
       .single();
 
@@ -439,7 +439,7 @@ async function ejecutarTool(nombre, args, profesional) {
       const fin = `${fecha}T23:59:59`;
       const { data } = await supabaseAdmin
         .from('turnos')
-        .select('id, fecha_inicio, fecha_fin, estado, tipo, paciente:pacientes(id, nombre, apellido, telefono), profesional:profesionales(nombre, apellido)')
+        .select('id, fecha_inicio, fecha_fin, estado, tipo, paciente:pacientes(id, nombre, apellido, telefono), profesional:profesionales!profesional_id(nombre, apellido)')
         .gte('fecha_inicio', inicio)
         .lte('fecha_inicio', fin)
         .order('fecha_inicio');

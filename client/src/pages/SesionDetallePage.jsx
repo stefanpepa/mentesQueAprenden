@@ -94,7 +94,7 @@ export default function SesionDetallePage() {
         {puedeEditar && (
           <button
             onClick={() => setEditando(!editando)}
-            className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${editando ? 'bg-gray-100 text-gray-700 border-gray-200' : 'border-teal-200 text-teal-600'}`}
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${editando ? 'bg-gray-100 text-gray-700 border-gray-200' : 'border-primary-200 text-primary-600'}`}
           >
             {editando ? 'Cancelar' : 'Editar'}
           </button>
@@ -107,8 +107,8 @@ export default function SesionDetallePage() {
           to={`/pacientes/${sesion.paciente_id}`}
           className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 p-4 mb-4 hover:shadow-md transition-shadow"
         >
-          <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-teal-700 font-bold text-sm">
+          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-primary-700 font-bold text-sm">
               {sesion.paciente.nombre[0]}{sesion.paciente.apellido[0]}
             </span>
           </div>
@@ -137,7 +137,7 @@ export default function SesionDetallePage() {
               value={notasActuales}
               onChange={(e) => setNotasLibres(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
               placeholder="Notas de la sesión..."
             />
             <IAAssistant
@@ -152,7 +152,7 @@ export default function SesionDetallePage() {
               <button
                 onClick={() => guardarMutation.mutate({ notas_libres: notasActuales })}
                 disabled={guardarMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
               >
                 <Save size={14} />
                 {guardarMutation.isPending ? 'Guardando...' : 'Guardar notas'}
@@ -171,26 +171,26 @@ export default function SesionDetallePage() {
       </div>
 
       {/* Resumen IA */}
-      <div className="bg-teal-50 rounded-2xl border border-teal-100 p-5 mb-4">
+      <div className="bg-primary-50 rounded-2xl border border-primary-100 p-5 mb-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles size={16} className="text-teal-600" />
+            <Sparkles size={16} className="text-primary-600" />
             Resumen IA
           </h2>
           {puedeEditar && sesion.notas_libres && (
             <button
               onClick={() => resumirMutation.mutate()}
               disabled={resumirMutation.isPending}
-              className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+              className="text-xs text-primary-600 hover:text-primary-700 font-medium"
             >
               {resumirMutation.isPending ? 'Generando...' : sesion.resumen_ia ? 'Regenerar' : 'Generar'}
             </button>
           )}
         </div>
         {sesion.resumen_ia ? (
-          <p className="text-sm text-teal-900 leading-relaxed">{sesion.resumen_ia}</p>
+          <p className="text-sm text-primary-900 leading-relaxed">{sesion.resumen_ia}</p>
         ) : (
-          <p className="text-sm text-teal-400 italic">Sin resumen. Guardá notas y hacé click en "Generar".</p>
+          <p className="text-sm text-primary-400 italic">Sin resumen. Guardá notas y hacé click en "Generar".</p>
         )}
       </div>
 

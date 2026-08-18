@@ -50,7 +50,7 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profesionales-admin'] })
   });
 
-  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
+  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 
   return (
     <div className="p-4 lg:p-6 max-w-4xl mx-auto">
@@ -80,7 +80,7 @@ export default function AdminPage() {
           <div className="flex justify-end mb-4">
             <button
               onClick={() => setModalNuevo(true)}
-              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium"
+              className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium"
             >
               <UserPlus size={16} /> Agregar profesional
             </button>
@@ -89,8 +89,8 @@ export default function AdminPage() {
           <div className="space-y-2">
             {profesionales?.map(prof => (
               <div key={prof.id} className={`bg-white rounded-2xl border p-4 flex items-center gap-4 ${!prof.activo ? 'opacity-50 border-gray-100' : 'border-gray-100'}`}>
-                <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-teal-700 font-semibold text-sm">
+                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-primary-700 font-semibold text-sm">
                     {prof.nombre[0]}{prof.apellido[0]}
                   </span>
                 </div>
@@ -195,7 +195,7 @@ export default function AdminPage() {
           )}
           <div className="flex gap-3">
             <button onClick={() => setModalNuevo(false)} className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700">Cancelar</button>
-            <button onClick={() => crearMutation.mutate(form)} disabled={crearMutation.isPending} className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium">
+            <button onClick={() => crearMutation.mutate(form)} disabled={crearMutation.isPending} className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium">
               {crearMutation.isPending ? 'Creando...' : 'Crear profesional'}
             </button>
           </div>
@@ -251,7 +251,7 @@ export default function AdminPage() {
               <button
                 onClick={() => editarMutation.mutate({ id: modalEditar.id, nombre: modalEditar.nombre, apellido: modalEditar.apellido, matricula: modalEditar.matricula, porcentaje_honorarios: modalEditar.porcentaje_honorarios })}
                 disabled={editarMutation.isPending}
-                className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
               >
                 {editarMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </button>

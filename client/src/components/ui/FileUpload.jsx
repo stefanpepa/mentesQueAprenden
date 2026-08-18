@@ -91,7 +91,7 @@ export default function FileUpload({ pacienteId, sesionId, onSubido }) {
         onDrop={onDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-gray-300 hover:border-teal-400 rounded-xl p-6 text-center cursor-pointer transition-colors"
+        className="border-2 border-dashed border-gray-300 hover:border-primary-400 rounded-xl p-6 text-center cursor-pointer transition-colors"
       >
         <Upload size={24} className="mx-auto text-gray-400 mb-2" />
         <p className="text-sm text-gray-600 font-medium">Arrastrá archivos o hacé click</p>
@@ -131,7 +131,7 @@ export default function FileUpload({ pacienteId, sesionId, onSubido }) {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                {item.estado === 'subiendo' && <Loader size={16} className="animate-spin text-teal-500" />}
+                {item.estado === 'subiendo' && <Loader size={16} className="animate-spin text-primary-500" />}
                 {item.estado === 'ok' && <CheckCircle size={16} className="text-green-500" />}
                 {item.estado === 'error' && <span className="text-xs text-red-500">{item.error}</span>}
                 {item.estado === 'pendiente' && (
@@ -147,7 +147,7 @@ export default function FileUpload({ pacienteId, sesionId, onSubido }) {
             <button
               onClick={subirTodos}
               disabled={subiendo}
-              className="w-full py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+              className="w-full py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
             >
               {subiendo ? 'Subiendo...' : `Subir ${archivos.filter(a => a.estado === 'pendiente').length} archivo(s)`}
             </button>

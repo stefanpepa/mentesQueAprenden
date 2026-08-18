@@ -17,7 +17,7 @@ router.get('/', requireAuth, async (req, res) => {
       *,
       sesion:sesiones(id, fecha, tipo),
       paciente:pacientes(id, nombre, apellido),
-      profesional:profesionales(id, nombre, apellido, especialidad)
+      profesional:profesionales!profesional_id(id, nombre, apellido, especialidad)
     `)
     .order('fecha_pago', { ascending: false });
 
@@ -43,7 +43,7 @@ router.get('/sesiones-pendientes', requireAuth, async (req, res) => {
     .select(`
       id, fecha, tipo, monto, duracion_minutos,
       paciente:pacientes(id, nombre, apellido),
-      profesional:profesionales(id, nombre, apellido)
+      profesional:profesionales!profesional_id(id, nombre, apellido)
     `)
     .eq('pagado', false)
     .not('monto', 'is', null)
@@ -70,7 +70,7 @@ router.post('/',
     // Obtener datos de la sesión y del profesional
     const { data: sesion, error: sesErr } = await supabaseAdmin
       .from('sesiones')
-      .select('*, profesional:profesionales(porcentaje_honorarios)')
+      .select('*, profesional:profesionales!profesional_id(porcentaje_honorarios)')
       .eq('id', sesion_id)
       .single();
 
@@ -127,7 +127,7 @@ router.get('/liquidacion', requireAuth, requireAdmin, async (req, res) => {
     .select(`
       profesional_id,
       monto_total, monto_profesional, monto_espacio,
-      profesional:profesionales(nombre, apellido, especialidad)
+      profesional:profesionales!profesional_id(nombre, apellido, especialidad)
     `)
     .gte('fecha_pago', inicio)
     .lt('fecha_pago', fin.toISOString().slice(0, 10));

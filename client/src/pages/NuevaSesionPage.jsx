@@ -75,7 +75,7 @@ export default function NuevaSesionPage() {
     });
   };
 
-  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
+  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 
   if (sesionCreada) {
     return (
@@ -97,7 +97,7 @@ export default function NuevaSesionPage() {
             <button
               onClick={finalizarConResumen}
               disabled={resumirMutation.isPending || !notasLibres}
-              className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
             >
               <Sparkles size={16} />
               {resumirMutation.isPending ? 'Generando...' : 'Generar resumen IA'}
@@ -162,7 +162,7 @@ export default function NuevaSesionPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Notas clínicas</h2>
             <span className="text-xs text-gray-400 flex items-center gap-1">
-              <Sparkles size={12} className="text-teal-400" />
+              <Sparkles size={12} className="text-primary-400" />
               Asistencia IA disponible
             </span>
           </div>
@@ -207,7 +207,7 @@ export default function NuevaSesionPage() {
           <button type="button" onClick={() => navigate(-1)} className="flex-1 py-3 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50">
             Cancelar
           </button>
-          <button type="submit" disabled={mutation.isPending} className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl font-medium">
+          <button type="submit" disabled={mutation.isPending} className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl font-medium">
             {mutation.isPending ? 'Guardando...' : 'Registrar sesión'}
           </button>
         </div>

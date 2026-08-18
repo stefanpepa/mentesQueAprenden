@@ -6,9 +6,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
 import api from './services/api';
 import LoginPage from './components/auth/LoginPage';
-import AppLayout from './components/layout/AppLayout';
-import ChatPage from './pages/ChatPage';
-import DashboardPage from './pages/DashboardPage';
+import MainShell from './components/layout/MainShell';
+import InicioPage from './pages/InicioPage';
 import PacientesPage from './pages/PacientesPage';
 import NuevoPacientePage from './pages/NuevoPacientePage';
 import EditarPacientePage from './pages/EditarPacientePage';
@@ -54,10 +53,9 @@ export default function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <AppLayout>
+                <MainShell>
                   <Routes>
-                    <Route path="/" element={<ChatPage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/" element={<InicioPage />} />
                     <Route path="/pacientes" element={<PacientesPage />} />
                     <Route path="/pacientes/nuevo" element={<NuevoPacientePage />} />
                     <Route path="/pacientes/:id" element={<PacienteDetallePage />} />
@@ -70,7 +68,7 @@ export default function App() {
                     <Route path="/admin" element={<AdminPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
-                </AppLayout>
+                </MainShell>
               </ProtectedRoute>
             }
           />

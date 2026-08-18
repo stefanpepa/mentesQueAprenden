@@ -43,7 +43,7 @@ export default function IAAssistant({ pacienteId, sesionId, tipoSesion, especial
           <button
             type="button"
             onClick={sugerirNotas}
-            className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-700 font-medium py-1.5"
+            className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium py-1.5"
           >
             <Sparkles size={15} />
             Asistir con IA
@@ -51,18 +51,18 @@ export default function IAAssistant({ pacienteId, sesionId, tipoSesion, especial
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
       ) : estado === 'loading' ? (
-        <div className="flex items-center gap-2 text-sm text-teal-500 py-2">
+        <div className="flex items-center gap-2 text-sm text-primary-500 py-2">
           <Loader size={15} className="animate-spin" />
           Generando sugerencia...
         </div>
       ) : (
-        <div className="mt-3 border border-teal-200 rounded-xl overflow-hidden">
-          <div className="bg-teal-50 px-3 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-teal-700">
+        <div className="mt-3 border border-primary-200 rounded-xl overflow-hidden">
+          <div className="bg-primary-50 px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-primary-700">
               <Sparkles size={13} />
               Sugerencia de IA — revisá antes de aceptar
             </div>
-            <button onClick={() => setEstado('idle')} className="text-teal-400 hover:text-teal-600">
+            <button onClick={() => setEstado('idle')} className="text-primary-400 hover:text-primary-600">
               <X size={14} />
             </button>
           </div>
@@ -73,7 +73,7 @@ export default function IAAssistant({ pacienteId, sesionId, tipoSesion, especial
             <button
               type="button"
               onClick={aceptar}
-              className="flex items-center gap-1.5 text-sm bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
             >
               <CheckCircle size={14} />
               Aceptar
@@ -88,7 +88,7 @@ export default function IAAssistant({ pacienteId, sesionId, tipoSesion, especial
             <button
               type="button"
               onClick={sugerirNotas}
-              className="text-sm text-teal-500 hover:text-teal-700 px-3 py-1.5 ml-auto"
+              className="text-sm text-primary-500 hover:text-primary-700 px-3 py-1.5 ml-auto"
             >
               Regenerar
             </button>

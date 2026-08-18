@@ -49,7 +49,7 @@ export default function PacientesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
         <Link
           to="/pacientes/nuevo"
-          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl font-medium transition-colors"
+          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl font-medium transition-colors"
         >
           <Plus size={18} />
           <span className="hidden sm:inline">Nuevo paciente</span>
@@ -64,13 +64,13 @@ export default function PacientesPage() {
             value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPage(1); }}
             placeholder="Buscar por nombre, apellido o DNI..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
           />
         </div>
         <select
           value={estadoFiltro}
           onChange={(e) => { setEstadoFiltro(e.target.value); setPage(1); }}
-          className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+          className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
         >
           <option value="">Todos los estados</option>
           <option value="activo">Activos</option>
@@ -109,8 +109,8 @@ export default function PacientesPage() {
                 to={`/pacientes/${paciente.id}`}
                 className="flex items-center gap-4 bg-white rounded-xl p-4 hover:shadow-md transition-shadow border border-gray-100"
               >
-                <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-teal-700 font-semibold text-sm">
+                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-primary-700 font-semibold text-sm">
                     {paciente.nombre[0]}{paciente.apellido[0]}
                   </span>
                 </div>

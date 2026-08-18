@@ -38,7 +38,7 @@ export default function NuevoPacientePage() {
   );
 
   const inputClass = (hasError) =>
-    `w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${
+    `w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm ${
       hasError ? 'border-red-400' : 'border-gray-300'
     }`;
 
@@ -229,7 +229,7 @@ export default function NuevoPacientePage() {
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl font-medium transition-colors"
+            className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl font-medium transition-colors"
           >
             {mutation.isPending ? 'Guardando...' : 'Crear paciente'}
           </button>

@@ -165,7 +165,7 @@ router.get('/:pacienteId/sesiones',
       .select(`
         id, fecha, tipo, duracion_minutos, notas_libres, resumen_ia,
         monto, pagado, fecha_pago,
-        profesional:profesionales(id, nombre, apellido, especialidad)
+        profesional:profesionales!profesional_id(id, nombre, apellido, especialidad)
       `, { count: 'exact' })
       .eq('paciente_id', req.params.pacienteId)
       .order('fecha', { ascending: false })

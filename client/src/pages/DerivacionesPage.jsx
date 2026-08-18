@@ -97,7 +97,7 @@ export default function DerivacionesPage() {
     setLoadingIA(false);
   };
 
-  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
+  const inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 
   return (
     <div className="p-4 lg:p-6 max-w-4xl mx-auto">
@@ -105,7 +105,7 @@ export default function DerivacionesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Derivaciones</h1>
         <button
           onClick={() => setModalNueva(true)}
-          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium"
+          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium"
         >
           <ArrowLeftRight size={16} /> Nueva derivación
         </button>
@@ -283,15 +283,15 @@ export default function DerivacionesPage() {
                 type="button"
                 onClick={pedirSugerenciaIA}
                 disabled={loadingIA}
-                className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-700 font-medium"
+                className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
               >
                 <Sparkles size={14} />
                 {loadingIA ? 'Consultando IA...' : 'Consultar IA sobre este caso'}
               </button>
               {sugerenciaIA && (
-                <div className="mt-2 bg-teal-50 border border-teal-100 rounded-xl p-3">
-                  <p className="text-xs font-medium text-teal-600 mb-1">Sugerencia IA</p>
-                  <p className="text-sm text-teal-900">{sugerenciaIA}</p>
+                <div className="mt-2 bg-primary-50 border border-primary-100 rounded-xl p-3">
+                  <p className="text-xs font-medium text-primary-600 mb-1">Sugerencia IA</p>
+                  <p className="text-sm text-primary-900">{sugerenciaIA}</p>
                 </div>
               )}
             </div>
@@ -308,7 +308,7 @@ export default function DerivacionesPage() {
             <button
               onClick={() => crearMutation.mutate(formNueva)}
               disabled={crearMutation.isPending || !formNueva.paciente_id || !formNueva.profesional_destino_id || !formNueva.motivo}
-              className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
+              className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
             >
               {crearMutation.isPending ? 'Enviando...' : 'Enviar derivación'}
             </button>
