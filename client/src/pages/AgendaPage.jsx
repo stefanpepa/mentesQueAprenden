@@ -39,7 +39,7 @@ export default function AgendaPage() {
   const [filtroProf, setFiltroProf] = useState(profesional?.id || '');
   const [nuevaFecha, setNuevaFecha] = useState('');
   const [nuevaHora, setNuevaHora] = useState('09:00');
-  const [formData, setFormData] = useState({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50 });
+  const [formData, setFormData] = useState({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50, profesional_id: '' });
 
   const { data: turnos } = useQuery({
     queryKey: ['turnos-agenda', rango, filtroProf],
@@ -110,6 +110,7 @@ export default function AgendaPage() {
   const handleDateSelect = (info) => {
     setNuevaFecha(format(info.start, 'yyyy-MM-dd'));
     setNuevaHora(format(info.start, 'HH:mm'));
+    setFormData(p => ({ ...p, profesional_id: filtroProf || profesional.id }));
     setModalNuevo(true);
   };
 
@@ -124,7 +125,7 @@ export default function AgendaPage() {
     crearMutation.mutate({
       fecha_inicio: inicio.toISOString(),
       fecha_fin: fin.toISOString(),
-      profesional_id: filtroProf || profesional.id,
+      profesional_id: formData.profesional_id || filtroProf || profesional.id,
       paciente_id: formData.paciente_id || undefined,
       tipo: formData.tipo,
       notas: formData.notas
@@ -150,7 +151,11 @@ export default function AgendaPage() {
             </select>
           )}
           <button
-            onClick={() => { setNuevaFecha(format(new Date(), 'yyyy-MM-dd')); setModalNuevo(true); }}
+            onClick={() => {
+              setNuevaFecha(format(new Date(), 'yyyy-MM-dd'));
+              setFormData(p => ({ ...p, profesional_id: filtroProf || profesional.id }));
+              setModalNuevo(true);
+            }}
             className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
           >
             <Plus size={16} /> Nuevo turno
@@ -234,6 +239,23 @@ export default function AgendaPage() {
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
+
+          {isAdmin() && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Profesional *</label>
+              <select
+                value={formData.profesional_id}
+                onChange={(e) => setFormData(p => ({ ...p, profesional_id: e.target.value }))}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Seleccionar profesional...</option>
+                {profesionales?.map(p => (
+                  <option key={p.id} value={p.id}>{p.apellido}, {p.nombre}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Paciente</label>

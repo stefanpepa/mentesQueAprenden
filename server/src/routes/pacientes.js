@@ -92,12 +92,23 @@ router.post('/',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
+    const CAMPOS_CREABLES = [
+      'nombre', 'apellido', 'dni', 'fecha_nacimiento', 'genero', 'telefono',
+      'telefono_alternativo', 'email', 'direccion', 'localidad', 'provincia',
+      'motivo_consulta', 'obra_social_id', 'numero_afiliado',
+      'profesional_principal_id', 'responsable_nombre', 'responsable_vinculo',
+      'responsable_telefono'
+    ];
+    const insertData = Object.fromEntries(
+      Object.entries(req.body).filter(([k]) => CAMPOS_CREABLES.includes(k))
+    );
+
     const db = getAuthenticatedClient(req);
     const { data, error } = await db
       .from('pacientes')
       .insert({
-        ...req.body,
-        profesional_principal_id: req.body.profesional_principal_id || req.profesional.id,
+        ...insertData,
+        profesional_principal_id: insertData.profesional_principal_id || req.profesional.id,
         created_by: req.profesional.id
       })
       .select()
@@ -129,10 +140,11 @@ router.patch('/:id',
 
     // Allowlist explícita de campos editables
     const CAMPOS_EDITABLES = [
-      'nombre', 'apellido', 'dni', 'fecha_nacimiento', 'telefono', 'email',
+      'nombre', 'apellido', 'dni', 'fecha_nacimiento', 'genero', 'telefono',
+      'telefono_alternativo', 'email', 'direccion', 'localidad', 'provincia',
       'estado', 'motivo_consulta', 'obra_social_id', 'numero_afiliado',
       'profesional_principal_id', 'responsable_nombre', 'responsable_vinculo',
-      'responsable_telefono', 'observaciones'
+      'responsable_telefono'
     ];
     const updateData = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => CAMPOS_EDITABLES.includes(k))
@@ -149,6 +161,29 @@ router.patch('/:id',
 
     if (error) return res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
     res.json(data);
+  }
+);
+
+// DELETE /pacientes/:id (soft delete — el historial clínico nunca se borra, Ley 25.326)
+router.delete('/:id',
+  requireAuth,
+  registrarAcceso('editar', 'paciente'),
+  [param('id').isUUID()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    const db = getAuthenticatedClient(req);
+    const { data, error } = await db
+      .from('pacientes')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .is('deleted_at', null)
+      .select('id, nombre, apellido')
+      .single();
+
+    if (error) return res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+    res.json({ message: `Paciente ${data.apellido}, ${data.nombre} eliminado`, id: data.id });
   }
 );
 
@@ -173,6 +208,26 @@ router.get('/:pacienteId/sesiones',
 
     if (error) return res.status(500).json({ error: error.message });
     res.json({ data, pagination: { total: count, page: Number(page), limit: Number(limit) } });
+  }
+);
+
+// GET /pacientes/:id/turnos
+router.get('/:pacienteId/turnos',
+  requireAuth,
+  async (req, res) => {
+    const db = getAuthenticatedClient(req);
+
+    const { data, error } = await db
+      .from('turnos')
+      .select(`
+        id, fecha_inicio, fecha_fin, estado, tipo, notas,
+        profesional:profesionales!profesional_id(id, nombre, apellido)
+      `)
+      .eq('paciente_id', req.params.pacienteId)
+      .order('fecha_inicio', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
   }
 );
 

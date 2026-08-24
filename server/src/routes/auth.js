@@ -65,6 +65,77 @@ router.post('/register',
   }
 );
 
+// POST /auth/signup - Registro público de profesionales (sin admin)
+router.post('/signup',
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 8 }),
+    body('nombre').trim().notEmpty(),
+    body('apellido').trim().notEmpty(),
+    body('especialidad').isIn(['psicopedagogia', 'psicologia', 'fonoaudiologia', 'otro']),
+    body('matricula').optional().trim(),
+    body('telefono').optional().trim()
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(422).json({ errors: errors.array() });
+    }
+
+    const { email, password, nombre, apellido, especialidad, matricula, telefono } = req.body;
+
+    // Crear usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message });
+    }
+
+    // Crear registro en tabla profesionales — siempre rol 'profesional', nunca admin desde acá
+    const { data: profesional, error: profError } = await supabaseAdmin
+      .from('profesionales')
+      .insert({
+        id: authData.user.id,
+        email,
+        nombre,
+        apellido,
+        especialidad,
+        rol: 'profesional',
+        matricula,
+        telefono,
+        porcentaje_honorarios: 70.00
+      })
+      .select()
+      .single();
+
+    if (profError) {
+      // Rollback: eliminar usuario de auth si falla el insert
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      if (profError.code === '23505') return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
+      return res.status(500).json({ error: 'Error al crear la cuenta' });
+    }
+
+    // Login automático tras el registro
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
+    if (sessionError) {
+      return res.status(201).json({ profesional, session: null });
+    }
+
+    res.status(201).json({
+      profesional,
+      session: {
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+        expires_at: sessionData.session.expires_at
+      }
+    });
+  }
+);
+
 // POST /auth/login
 router.post('/login',
   [
@@ -110,6 +181,24 @@ router.post('/logout', requireAuth, async (req, res) => {
   }
   res.json({ message: 'Sesión cerrada' });
 });
+
+// POST /auth/forgot-password - Envía email con link para restablecer contraseña
+router.post('/forgot-password',
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(422).json({ errors: errors.array() });
+    }
+
+    await supabase.auth.resetPasswordForEmail(req.body.email, {
+      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`
+    });
+
+    // Respuesta genérica siempre, para no revelar si el email existe
+    res.json({ message: 'Si el email existe, vas a recibir un link para restablecer tu contraseña.' });
+  }
+);
 
 // POST /auth/refresh
 router.post('/refresh',

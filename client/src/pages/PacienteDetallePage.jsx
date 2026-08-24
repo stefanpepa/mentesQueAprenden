@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, differenceInYears } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, Mail, FileText, Calendar,
-  ArrowLeftRight, Paperclip, ChevronRight, Plus, Sparkles, Loader
+  ArrowLeftRight, Paperclip, ChevronRight, Plus, Sparkles, Loader, Trash2
 } from 'lucide-react';
 import Modal from '../components/ui/Modal';
 import FileUpload from '../components/ui/FileUpload';
@@ -13,9 +14,18 @@ import api from '../services/api';
 
 const TABS = [
   { id: 'historial', label: 'Historial', icon: FileText },
+  { id: 'turnos', label: 'Turnos', icon: Calendar },
   { id: 'derivaciones', label: 'Derivaciones', icon: ArrowLeftRight },
   { id: 'archivos', label: 'Archivos', icon: Paperclip },
 ];
+
+const ESTADO_TURNO_ESTILO = {
+  programado: 'bg-blue-100 text-blue-700',
+  confirmado: 'bg-green-100 text-green-700',
+  realizado: 'bg-gray-100 text-gray-600',
+  cancelado: 'bg-red-100 text-red-700',
+  ausente: 'bg-amber-100 text-amber-700',
+};
 
 const TIPO_SESION_LABEL = {
   evaluacion: 'Evaluación',
@@ -28,13 +38,27 @@ const TIPO_SESION_LABEL = {
 export default function PacienteDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState('historial');
   const [modalPDF, setModalPDF] = useState(null); // { arch, analisis, pregunta }
   const [preguntaPDF, setPreguntaPDF] = useState('');
+  const [confirmarEliminar, setConfirmarEliminar] = useState(false);
 
   const analizarPDFMutation = useMutation({
     mutationFn: ({ archivo_id, pregunta }) => api.post('/ia/analizar-pdf', { archivo_id, pregunta }).then(r => r.data),
     onSuccess: (data) => setModalPDF(prev => ({ ...prev, analisis: data.analisis }))
+  });
+
+  const eliminarMutation = useMutation({
+    mutationFn: () => api.delete(`/pacientes/${id}`).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('pacientes')
+      });
+      toast.success('Paciente eliminado');
+      navigate('/');
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al eliminar el paciente')
   });
 
   const { data: paciente, isLoading } = useQuery({
@@ -46,6 +70,12 @@ export default function PacienteDetallePage() {
     queryKey: ['paciente-sesiones', id],
     queryFn: () => api.get(`/pacientes/${id}/sesiones`).then(r => r.data),
     enabled: tab === 'historial'
+  });
+
+  const { data: turnos } = useQuery({
+    queryKey: ['paciente-turnos', id],
+    queryFn: () => api.get(`/pacientes/${id}/turnos`).then(r => r.data),
+    enabled: tab === 'turnos'
   });
 
   const { data: derivaciones } = useQuery({
@@ -85,6 +115,13 @@ export default function PacienteDetallePage() {
         <h1 className="text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           {paciente.apellido}, {paciente.nombre}
         </h1>
+        <button
+          onClick={() => setConfirmarEliminar(true)}
+          className="p-2 rounded-xl hover:bg-red-50 text-red-500"
+          title="Eliminar paciente"
+        >
+          <Trash2 size={18} />
+        </button>
         <Link
           to={`/pacientes/${id}/editar`}
           className="text-sm text-primary-600 hover:text-primary-700 font-medium px-3 py-1.5 border border-primary-200 rounded-xl"
@@ -92,6 +129,31 @@ export default function PacienteDetallePage() {
           Editar
         </Link>
       </div>
+
+      {/* Modal: Confirmar eliminación */}
+      <Modal open={confirmarEliminar} onClose={() => setConfirmarEliminar(false)} title="Eliminar paciente" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            ¿Seguro que querés eliminar a <span className="font-medium text-gray-900">{paciente.apellido}, {paciente.nombre}</span>?
+            El paciente dejará de aparecer en los listados, pero su historial clínico se conserva.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmarEliminar(false)}
+              className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => eliminarMutation.mutate()}
+              disabled={eliminarMutation.isPending}
+              className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
+            >
+              {eliminarMutation.isPending ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Card resumen */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 mb-4">
@@ -236,6 +298,44 @@ export default function PacienteDetallePage() {
                 </div>
               </div>
             </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Tab: Turnos */}
+      {tab === 'turnos' && (
+        <div className="space-y-2">
+          {turnos?.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Calendar size={40} className="mx-auto mb-2" />
+              <p>Sin turnos agendados</p>
+            </div>
+          ) : turnos?.map(turno => (
+            <div key={turno.id} className="bg-white rounded-xl p-4 border border-gray-100">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-gray-900">
+                      {format(new Date(turno.fecha_inicio), "d 'de' MMMM yyyy, HH:mm", { locale: es })}
+                    </span>
+                    <span className="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">
+                      {TIPO_SESION_LABEL[turno.tipo] || turno.tipo}
+                    </span>
+                  </div>
+                  {turno.profesional && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      {turno.profesional.apellido}, {turno.profesional.nombre}
+                    </p>
+                  )}
+                  {turno.notas && (
+                    <p className="text-sm text-gray-500 mt-1 line-clamp-2">{turno.notas}</p>
+                  )}
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ESTADO_TURNO_ESTILO[turno.estado] || 'bg-gray-100 text-gray-600'}`}>
+                  {turno.estado}
+                </span>
+              </div>
+            </div>
           ))}
         </div>
       )}

@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { motion } from 'motion/react';
 import { CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import api from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 
 export function PacienteFormCard({ prefill = {} }) {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     nombre: prefill.nombre || '',
     apellido: prefill.apellido || '',
@@ -35,6 +39,9 @@ export function PacienteFormCard({ prefill = {} }) {
     try {
       const { data } = await api.post('/pacientes', form);
       setPaciente(data);
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('pacientes')
+      });
       toast.success(`Paciente ${data.apellido}, ${data.nombre} registrado`);
     } catch (err) {
       const respData = err.response?.data;
@@ -51,7 +58,12 @@ export function PacienteFormCard({ prefill = {} }) {
 
   if (paciente) {
     return (
-      <div className="mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm flex items-center gap-3">
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+        className="mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm flex items-center gap-3 origin-left"
+      >
         <CheckCircle size={18} className="text-green-600 flex-shrink-0" />
         <div>
           <p className="font-medium text-green-800">Paciente registrado</p>
@@ -59,7 +71,7 @@ export function PacienteFormCard({ prefill = {} }) {
             Ver ficha de {paciente.apellido}, {paciente.nombre} →
           </Link>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -107,6 +119,8 @@ export function PacienteFormCard({ prefill = {} }) {
 }
 
 export function TurnoFormCard({ prefill = {} }) {
+  const { profesional } = useAuthStore();
+  const queryClient = useQueryClient();
   const hoy = new Date().toISOString().slice(0, 16);
   const [form, setForm] = useState({
     paciente_id: prefill.paciente_id || '',
@@ -146,14 +160,22 @@ export function TurnoFormCard({ prefill = {} }) {
     }
     setSaving(true);
     try {
+      const duracion = Number(form.duracion_minutos) || 50;
+      const inicio = new Date(form.fecha_inicio);
+      const fin = new Date(inicio.getTime() + duracion * 60000);
       const { data } = await api.post('/turnos', {
         paciente_id: form.paciente_id,
-        fecha_inicio: form.fecha_inicio,
+        profesional_id: profesional.id,
+        fecha_inicio: inicio.toISOString(),
+        fecha_fin: fin.toISOString(),
         tipo: form.tipo,
-        duracion_minutos: Number(form.duracion_minutos),
         notas: form.notas || undefined,
       });
       setTurno(data);
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('turnos')
+      });
+      queryClient.invalidateQueries({ queryKey: ['paciente-turnos'] });
       toast.success('Turno agendado');
     } catch (err) {
       const respData = err.response?.data;
@@ -163,7 +185,12 @@ export function TurnoFormCard({ prefill = {} }) {
 
   if (turno) {
     return (
-      <div className="mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm flex items-center gap-3">
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+        className="mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm flex items-center gap-3 origin-left"
+      >
         <CheckCircle size={18} className="text-green-600 flex-shrink-0" />
         <div>
           <p className="font-medium text-green-800">Turno agendado</p>
@@ -172,7 +199,7 @@ export function TurnoFormCard({ prefill = {} }) {
             {format(new Date(turno.fecha_inicio), "d/MM/yyyy 'a las' HH:mm", { locale: es })}
           </p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -192,6 +219,12 @@ export function TurnoFormCard({ prefill = {} }) {
           className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
         {buscando && <p className="text-xs text-gray-400 mt-1">Buscando...</p>}
+        {!buscando && !form.paciente_id && form.paciente_busqueda.length >= 2 && pacientes.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">
+            No se encontró ningún paciente con ese nombre.{' '}
+            <Link to="/pacientes/nuevo" className="underline font-medium">Crear paciente nuevo</Link>
+          </p>
+        )}
         {pacientes.length > 0 && (
           <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
             {pacientes.map(p => (
@@ -239,6 +272,16 @@ export function TurnoFormCard({ prefill = {} }) {
 }
 
 export function ToolResultCard({ name, result }) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if ((name === 'eliminar_paciente' || name === 'crear_paciente') && result?.id) {
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('pacientes')
+      });
+    }
+  }, [name, result?.id]);
+
   if (result?.type === 'form' && result.form === 'crear_paciente') {
     return <PacienteFormCard prefill={result.prefill || {}} />;
   }
@@ -304,6 +347,20 @@ export function ToolResultCard({ name, result }) {
           {result.paciente ? `${result.paciente.apellido}, ${result.paciente.nombre}` : ''} · {format(new Date(result.fecha_inicio), "d/MM/yyyy 'a las' HH:mm", { locale: es })}
         </p>
       </div>
+    );
+  }
+
+  if (name === 'eliminar_paciente') {
+    return (
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+        className="mt-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm origin-left"
+      >
+        <p className="font-medium text-red-800">Paciente eliminado</p>
+        <p className="text-red-700 text-xs">{result.apellido}, {result.nombre}</p>
+      </motion.div>
     );
   }
 

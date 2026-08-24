@@ -1,9 +1,5 @@
 import axios from 'axios';
 
-if (import.meta.env.DEV && !localStorage.getItem('access_token')) {
-  localStorage.setItem('access_token', 'dev-token');
-}
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 15000,
@@ -42,11 +38,9 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${data.access_token}`;
         return api(original);
       } catch {
-        if (!import.meta.env.DEV) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
-        }
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

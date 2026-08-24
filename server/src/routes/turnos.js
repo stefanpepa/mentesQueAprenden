@@ -64,8 +64,19 @@ router.post('/',
 // PATCH /turnos/:id
 router.patch('/:id',
   requireAuth,
-  [param('id').isUUID()],
+  [
+    param('id').isUUID(),
+    body('fecha_inicio').optional().isISO8601(),
+    body('fecha_fin').optional().isISO8601(),
+    body('estado').optional().isIn(['programado', 'confirmado', 'cancelado', 'ausente', 'realizado']),
+    body('tipo').optional().isIn(['evaluacion', 'tratamiento', 'seguimiento', 'devolucion', 'reunion_interdisciplinaria']),
+    body('paciente_id').optional().isUUID(),
+    body('profesional_id').optional().isUUID()
+  ],
   async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
     const { created_by, created_at, id, ...updateData } = req.body;
     const db = getAuthenticatedClient(req);
 

@@ -16,9 +16,9 @@ const openrouter = new OpenAI({
   }
 });
 
-const MODELO_TEXTO = 'google/gemma-4-26b-a4b-it:free';
+const MODELO_TEXTO = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 const MODELO_PDF   = 'google/gemma-4-26b-a4b-it:free';
-const MODELO_CHAT  = 'google/gemma-4-26b-a4b-it:free';
+const MODELO_CHAT  = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -422,8 +422,10 @@ async function ejecutarTool(nombre, args, profesional) {
 
     case 'crear_paciente': {
       if (!args.fecha_nacimiento) throw new Error('fecha_nacimiento es obligatoria para crear un paciente');
+      if (!args.dni || !/^\d{7,8}$/.test(args.dni)) throw new Error('dni inválido: debe tener 7 u 8 dígitos');
+      const CAMPOS_PACIENTE = ['nombre', 'apellido', 'dni', 'fecha_nacimiento', 'telefono', 'email', 'motivo_consulta'];
       const payload = {
-        ...args,
+        ...Object.fromEntries(Object.entries(args).filter(([k]) => CAMPOS_PACIENTE.includes(k))),
         profesional_principal_id: args.profesional_principal_id || profesional.id,
         created_by: profesional.id,
         estado: 'activo'
@@ -473,6 +475,10 @@ async function ejecutarTool(nombre, args, profesional) {
     }
 
     case 'registrar_sesion': {
+      const TIPOS_SESION = ['evaluacion', 'tratamiento', 'seguimiento', 'devolucion', 'reunion_interdisciplinaria'];
+      if (args.tipo && !TIPOS_SESION.includes(args.tipo)) {
+        throw new Error(`tipo inválido: debe ser uno de ${TIPOS_SESION.join(', ')}`);
+      }
       const { data, error } = await supabaseAdmin.from('sesiones').insert({
         paciente_id: args.paciente_id,
         profesional_id: profesional.id,
@@ -484,6 +490,19 @@ async function ejecutarTool(nombre, args, profesional) {
         monto: args.monto
       }).select('*, paciente:pacientes(nombre, apellido)').single();
       if (error) throw new Error(error.message);
+      return data;
+    }
+
+    case 'eliminar_paciente': {
+      if (!args.paciente_id) throw new Error('paciente_id es obligatorio');
+      const { data, error } = await supabaseAdmin
+        .from('pacientes')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', args.paciente_id)
+        .is('deleted_at', null)
+        .select('id, nombre, apellido')
+        .single();
+      if (error) throw new Error(error.code === 'PGRST116' ? 'Paciente no encontrado' : error.message);
       return data;
     }
 
@@ -554,16 +573,24 @@ Cuando el usuario pide una acción, respondé con un bloque JSON seguido de tu t
 Acciones disponibles:
 - buscar_pacientes: params: { busqueda: string }
 - ver_paciente: params: { paciente_id: string }
-- mostrar_formulario_paciente: params: { nombre?, apellido?, dni?, fecha_nacimiento?, telefono?, email?, motivo_consulta? } — Usar INMEDIATAMENTE cuando el usuario quiera crear un paciente, sin pedir datos primero. El usuario los completa en el formulario.
-- mostrar_formulario_turno: params: { paciente_id?, paciente_nombre?, fecha_inicio?, tipo?, duracion_minutos? } — Usar INMEDIATAMENTE cuando el usuario quiera agendar un turno. El usuario completa los datos en el formulario.
+- mostrar_formulario_paciente: params: { nombre?, apellido?, dni?, fecha_nacimiento?, telefono?, email?, motivo_consulta? } — Usar INMEDIATAMENTE cuando el usuario quiera crear/registrar/agendar un PACIENTE nuevo (persona que todavía no existe en el sistema), sin pedir datos primero. El usuario los completa en el formulario. Ejemplos que van acá: "agendame un paciente nuevo", "quiero cargar un paciente", "registrar un paciente".
+- mostrar_formulario_turno: params: { paciente_id?, paciente_nombre?, fecha_inicio?, tipo?, duracion_minutos? } — Usar INMEDIATAMENTE cuando el usuario quiera agendar un TURNO (una cita/sesión) para un paciente que YA EXISTE en el sistema. El usuario completa los datos en el formulario. Si no está claro si el paciente ya existe, usá buscar_pacientes primero; si no aparece, ofrecé mostrar_formulario_paciente en su lugar.
 - crear_paciente: NO usar directamente; solo se invoca desde el formulario.
 - ver_agenda: params: { fecha?: "YYYY-MM-DD" } (default: hoy)
 - crear_turno: NO usar directamente; solo se invoca desde el formulario.
 - registrar_sesion: params: { paciente_id, fecha: "YYYY-MM-DDTHH:MM:00", tipo, duracion_minutos?, notas_libres?, monto? }
 - listar_profesionales: params: {}
+- eliminar_paciente: params: { paciente_id: string } — DA DE BAJA a un paciente (no borra su historial clínico, solo lo oculta de los listados). Es una acción DESTRUCTIVA e IRREVERSIBLE desde el chat: nunca la ejecutes directamente aunque el usuario diga el nombre. Primero usá buscar_pacientes para encontrar el paciente_id real (si no hay resultados, avisá que no existe, no inventes que preguntaste un ID). Después mostrale al usuario el nombre completo encontrado y preguntale explícitamente "¿Confirmás eliminar a [nombre]? Esta acción no se puede deshacer desde acá." Solo ejecutá eliminar_paciente en el mensaje siguiente si el usuario confirma claramente (sí, dale, confirmo, etc).
 
 Si no necesitás ejecutar ninguna acción, respondé solo con texto plano.
-Respondé siempre en español, conciso.`;
+Respondé siempre en español, conciso.
+
+También sos un apoyo clínico/técnico para el profesional: si te preguntan algo de índole psicopedagógica, psicológica o fonoaudiológica (tests, criterios diagnósticos, estrategias de intervención, interpretación de resultados, bibliografía, etc), respondé con el conocimiento profesional que tengas, como lo haría un colega con experiencia.
+
+REGLAS CRÍTICAS SOBRE PRECISIÓN (tenés modelo de lenguaje chico, propenso a inventar — seguí esto estricto):
+- Respondé con confianza cuando el conocimiento es general o conceptual (para qué sirve un test, qué mide, cómo se usa un criterio diagnóstico, estrategias de intervención). No te abstengas de estas preguntas.
+- Pero NUNCA inventes datos técnicos EXACTOS de tests o instrumentos psicométricos (ej: Test de Caras-R, WISC, ENI, etc.) si no estás realmente seguro: cantidad exacta de ítems, tiempos de aplicación en minutos, puntos de corte numéricos, normas de baremación, fórmulas de corrección. Estos son los datos donde más te equivocás. Si no tenés certeza alta de un número o dato preciso así, decilo explícitamente ("no tengo la certeza del dato exacto, verificalo en el manual del test") en vez de inventar un número que suene plausible. La diferencia es: explicaciones y criterio SÍ, números/cifras exactas dudosas NO.
+- NUNCA inventes datos clínicos de un paciente particular (diagnósticos, resultados de evaluaciones, fechas, historial) que no vengan de una tool ejecutada en esta conversación (buscar_pacientes, ver_paciente, ver_agenda, etc). Si no tenés el dato porque no lo consultaste, ejecutá la acción correspondiente o decí que no lo sabés. Esto no aplica al conocimiento técnico general, solo a datos específicos de pacientes reales del sistema.`;
 
     const chatMessages = [
       { role: 'system', content: systemPrompt },

@@ -22,10 +22,10 @@ router.get('/', requireAuth, async (req, res) => {
     .order('fecha_pago', { ascending: false });
 
   if (mes) {
-    const inicio = `${mes}-01`;
-    const fin = new Date(mes + '-01');
+    const inicio = `${mes}-01T00:00:00-03:00`;
+    const fin = new Date(`${mes}-01T00:00:00-03:00`);
     fin.setMonth(fin.getMonth() + 1);
-    q = q.gte('fecha_pago', inicio).lt('fecha_pago', fin.toISOString().slice(0, 10));
+    q = q.gte('fecha_pago', inicio).lt('fecha_pago', fin.toISOString());
   }
   if (profesional_id) q = q.eq('profesional_id', profesional_id);
 
@@ -118,8 +118,8 @@ router.get('/liquidacion', requireAuth, requireAdmin, async (req, res) => {
   const { mes } = req.query;
   if (!mes) return res.status(422).json({ error: 'Se requiere el parámetro mes (YYYY-MM)' });
 
-  const inicio = `${mes}-01`;
-  const fin = new Date(mes + '-01');
+  const inicio = `${mes}-01T00:00:00-03:00`;
+  const fin = new Date(`${mes}-01T00:00:00-03:00`);
   fin.setMonth(fin.getMonth() + 1);
 
   const { data, error } = await supabaseAdmin
@@ -130,7 +130,7 @@ router.get('/liquidacion', requireAuth, requireAdmin, async (req, res) => {
       profesional:profesionales!profesional_id(nombre, apellido, especialidad)
     `)
     .gte('fecha_pago', inicio)
-    .lt('fecha_pago', fin.toISOString().slice(0, 10));
+    .lt('fecha_pago', fin.toISOString());
 
   if (error) return res.status(500).json({ error: error.message });
 

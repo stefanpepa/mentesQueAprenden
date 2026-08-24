@@ -5,15 +5,8 @@ import api from '../services/api';
 export const useAuthStore = create(
   persist(
     (set, get) => ({
-      profesional: {
-        id: '00000000-0000-0000-0000-000000000001',
-        nombre: 'Admin',
-        apellido: 'Test',
-        email: 'admin@test.com',
-        rol: 'admin',
-        especialidad: 'psicopedagogia'
-      },
-      accessToken: 'dev-token',
+      profesional: null,
+      accessToken: null,
       refreshToken: null,
       isLoading: false,
       error: null,
@@ -33,6 +26,32 @@ export const useAuthStore = create(
           return { success: true };
         } catch (err) {
           const error = err.response?.data?.error || 'Error al iniciar sesión';
+          set({ isLoading: false, error });
+          return { success: false, error };
+        }
+      },
+
+      signup: async (payload) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { data } = await api.post('/auth/signup', payload);
+          if (data.session) {
+            localStorage.setItem('access_token', data.session.access_token);
+            localStorage.setItem('refresh_token', data.session.refresh_token);
+            set({
+              profesional: data.profesional,
+              accessToken: data.session.access_token,
+              refreshToken: data.session.refresh_token,
+              isLoading: false
+            });
+          } else {
+            set({ isLoading: false });
+          }
+          return { success: true, autoLogin: !!data.session };
+        } catch (err) {
+          const error = err.response?.data?.error
+            || err.response?.data?.errors?.map(e => e.msg).join(', ')
+            || 'Error al crear la cuenta';
           set({ isLoading: false, error });
           return { success: false, error };
         }

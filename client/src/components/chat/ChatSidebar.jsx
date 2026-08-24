@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Send, Bot, Loader2, MoreVertical, Settings, LogOut } from 'lucide-react';
+import { Send, Bot, Loader2, MoreVertical, Settings, LogOut, RotateCcw } from 'lucide-react';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { ToolResultCard } from './ChatToolResults';
@@ -58,6 +58,12 @@ export default function ChatSidebar() {
 
   const handleLogout = async () => { await logout(); navigate('/login'); };
 
+  const nuevaConversacion = () => {
+    setMessages([]);
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+    setMenuOpen(false);
+  };
+
   const iniciales = `${profesional?.nombre?.[0] || ''}${profesional?.apellido?.[0] || ''}`;
 
   return (
@@ -90,6 +96,9 @@ export default function ChatSidebar() {
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             <div className="absolute top-14 right-4 z-20 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 overflow-hidden">
+              <button onClick={nuevaConversacion} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-primary-50">
+                <RotateCcw size={16} /> Nueva conversación
+              </button>
               {isAdmin() && (
                 <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-primary-50">
                   <Settings size={16} /> Administración
@@ -181,6 +190,9 @@ export default function ChatSidebar() {
             <Send size={14} />
           </button>
         </div>
+        <p className="text-[10px] text-[#7a7288] mt-2 text-center leading-tight">
+          La IA puede cometer errores, incluso en temas clínicos o técnicos. Verificá siempre la información importante en fuentes oficiales.
+        </p>
       </div>
     </div>
   );

@@ -84,7 +84,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
       style={{ flexGrow: grow }}
       className="flex-1 min-w-[260px] flex flex-col bg-white border border-primary-100 rounded-lg overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
     >
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900">Agenda de hoy</h2>
         <span className="text-xs font-semibold text-primary-500">{expanded ? 'Cerrar ✕' : 'Ver calendario →'}</span>
       </div>
@@ -227,7 +227,7 @@ function PacientesCard({ grow, expanded, onToggle, onOpenPaciente }) {
       style={{ flexGrow: grow }}
       className="flex-1 min-w-[260px] flex flex-col bg-white border border-primary-100 rounded-lg overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
     >
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900">Tus pacientes</h2>
         <Link
           to="/pacientes/nuevo"

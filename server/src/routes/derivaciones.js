@@ -22,6 +22,17 @@ router.post('/',
     }
 
     const db = getAuthenticatedClient(req);
+
+    const { data: destino } = await db
+      .from('profesionales')
+      .select('id, activo')
+      .eq('id', req.body.profesional_destino_id)
+      .single();
+
+    if (!destino || !destino.activo) {
+      return res.status(422).json({ error: 'El profesional destinatario no existe o está inactivo' });
+    }
+
     const { data, error } = await db
       .from('derivaciones')
       .insert({

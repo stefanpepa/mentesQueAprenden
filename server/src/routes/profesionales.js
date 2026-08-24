@@ -33,10 +33,13 @@ router.patch('/:id',
       return res.status(403).json({ error: 'Sin permiso' });
     }
 
-    const { id, created_at, email, rol, ...updateData } = req.body;
+    const CAMPOS_EDITABLES = ['nombre', 'apellido', 'matricula', 'especialidad', 'telefono', 'porcentaje_honorarios'];
+    const updateData = Object.fromEntries(
+      Object.entries(req.body).filter(([k]) => CAMPOS_EDITABLES.includes(k))
+    );
 
     // Solo admin puede cambiar el porcentaje
-    if (updateData.porcentaje_honorarios && req.profesional.rol !== 'admin') {
+    if (updateData.porcentaje_honorarios !== undefined && req.profesional.rol !== 'admin') {
       delete updateData.porcentaje_honorarios;
     }
 
