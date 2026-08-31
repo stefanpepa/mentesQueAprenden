@@ -259,7 +259,7 @@ export default function DerivacionesPage() {
               className={inputClass}
             >
               <option value="">Seleccionar profesional</option>
-              {profesionales?.filter(p => p.id !== profesional?.id).map(p => (
+              {profesionales?.filter(p => p.id !== profesional?.id && p.rol !== 'admin').map(p => (
                 <option key={p.id} value={p.id}>{p.apellido}, {p.nombre} — {p.especialidad}</option>
               ))}
             </select>

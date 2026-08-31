@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const OpenAI = require('openai');
 const { requireAuth } = require('../middleware/auth');
 const { supabaseAdmin } = require('../config/supabase');
+const { extraerTextoDocumento } = require('../services/geminiExtractor');
 
 const router = express.Router();
 
@@ -17,7 +18,6 @@ const openrouter = new OpenAI({
 });
 
 const MODELO_TEXTO = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
-const MODELO_PDF   = 'google/gemma-4-26b-a4b-it:free';
 const MODELO_CHAT  = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 
 // ─────────────────────────────────────────────────────────────
@@ -41,6 +41,20 @@ async function completar(modelo, mensajes, maxTokens = 500) {
     messages: mensajes
   });
   return res.choices[0].message.content.trim();
+}
+
+// El chatbot usa supabaseAdmin (bypasea RLS), así que hay que replicar acá
+// la misma regla de acceso que la policy pacientes_select: dueño o derivación activa.
+async function tieneAccesoPorDerivacion(pacienteId, profesionalId) {
+  const { data } = await supabaseAdmin
+    .from('derivaciones')
+    .select('id')
+    .eq('paciente_id', pacienteId)
+    .eq('activa', true)
+    .in('estado', ['pendiente', 'aceptada'])
+    .or(`profesional_origen_id.eq.${profesionalId},profesional_destino_id.eq.${profesionalId}`)
+    .limit(1);
+  return (data || []).length > 0;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -215,31 +229,16 @@ router.post('/analizar-pdf',
     if (urlErr) return res.status(500).json({ error: 'No se pudo acceder al archivo' });
 
     const instruccion = pregunta
-      ? `El profesional pregunta: "${pregunta}". Respondé basándote en el documento.`
-      : 'Extraé y resumí la información clínica más relevante: diagnósticos, resultados, recomendaciones y fechas importantes. Usá viñetas. Máximo 400 palabras.';
+      ? `El profesional pregunta: "${pregunta}". Respondé basándote en el texto del documento.`
+      : 'Resumí la información clínica más relevante: diagnósticos, resultados, recomendaciones y fechas importantes. Usá viñetas. Máximo 400 palabras.';
 
     try {
-      const res2 = await openrouter.chat.completions.create({
-        model: MODELO_PDF,
-        max_tokens: 600,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Sos un asistente médico. Analizá este documento (${archivo.nombre_original}, tipo: ${archivo.tipo}). ${instruccion}`
-              },
-              {
-                type: 'image_url',
-                image_url: { url: urlData.signedUrl }
-              }
-            ]
-          }
-        ]
-      });
+      // Etapa 1 — extracción: Gemini transcribe el documento sin interpretarlo.
+      const textoExtraido = await extraerTextoDocumento(urlData.signedUrl, archivo.nombre_original, archivo.mime_type);
 
-      const analisis = res2.choices[0].message.content.trim();
+      // Etapa 2 — análisis: el modelo de texto interpreta el contenido ya transcripto.
+      const prompt = `Sos un asistente médico. A continuación el texto transcripto de un documento (${archivo.nombre_original}, tipo: ${archivo.tipo}).\n\n"""\n${textoExtraido}\n"""\n\n${instruccion}`;
+      const analisis = await completar(MODELO_TEXTO, [{ role: 'user', content: prompt }], 600);
 
       // Guardar el análisis como metadata del archivo
       await supabaseAdmin
@@ -248,9 +247,9 @@ router.post('/analizar-pdf',
         .eq('id', archivo_id)
         .is('descripcion', null); // Solo si no tenía descripción previa
 
-      res.json({ analisis, modelo: MODELO_PDF });
+      res.json({ analisis, texto_extraido: textoExtraido, modelo: MODELO_TEXTO });
     } catch (err) {
-      console.error('OpenRouter Gemini error:', err.message);
+      console.error('Error al analizar PDF:', err.message);
       res.status(502).json({ error: 'Error al analizar el archivo con IA' });
     }
   }
@@ -392,23 +391,40 @@ const CHAT_TOOLS = [
 async function ejecutarTool(nombre, args, profesional) {
   switch (nombre) {
     case 'buscar_pacientes': {
+      const { data: derivados } = await supabaseAdmin
+        .from('derivaciones')
+        .select('paciente_id')
+        .eq('activa', true)
+        .in('estado', ['pendiente', 'aceptada'])
+        .or(`profesional_origen_id.eq.${profesional.id},profesional_destino_id.eq.${profesional.id}`);
+      const idsDerivados = (derivados || []).map(d => d.paciente_id);
+
+      const filtroAcceso = idsDerivados.length
+        ? `profesional_principal_id.eq.${profesional.id},id.in.(${idsDerivados.join(',')})`
+        : `profesional_principal_id.eq.${profesional.id}`;
+
       const { data } = await supabaseAdmin
         .from('pacientes')
-        .select('id, nombre, apellido, dni, fecha_nacimiento, estado, telefono, motivo_consulta')
+        .select('id, nombre, apellido, dni, fecha_nacimiento, estado, telefono, motivo_consulta, profesional_principal_id')
         .or(`nombre.ilike.%${args.busqueda}%,apellido.ilike.%${args.busqueda}%,dni.ilike.%${args.busqueda}%`)
         .is('deleted_at', null)
+        .or(filtroAcceso)
         .limit(5);
-      return data || [];
+      return (data || []).map(({ profesional_principal_id, ...p }) => p);
     }
 
     case 'ver_paciente': {
-      const [{ data: pac }, { data: sesiones }] = await Promise.all([
-        supabaseAdmin.from('pacientes').select('*').eq('id', args.paciente_id).single(),
-        supabaseAdmin.from('sesiones').select('id, fecha, tipo, resumen_ia, notas_libres, monto, pagado')
-          .eq('paciente_id', args.paciente_id)
-          .order('fecha', { ascending: false })
-          .limit(5)
-      ]);
+      const { data: pac } = await supabaseAdmin.from('pacientes').select('*').eq('id', args.paciente_id).single();
+      if (!pac) return { error: 'Paciente no encontrado' };
+
+      const tieneAcceso = pac.profesional_principal_id === profesional.id || await tieneAccesoPorDerivacion(args.paciente_id, profesional.id);
+      if (!tieneAcceso) return { error: 'No tenés acceso a este paciente' };
+
+      const { data: sesiones } = await supabaseAdmin.from('sesiones')
+        .select('id, fecha, tipo, resumen_ia, notas_libres, monto, pagado')
+        .eq('paciente_id', args.paciente_id)
+        .order('fecha', { ascending: false })
+        .limit(5);
       return { paciente: pac, sesiones_recientes: sesiones };
     }
 

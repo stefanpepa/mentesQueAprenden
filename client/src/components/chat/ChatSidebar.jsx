@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Send, Bot, Loader2, MoreVertical, Settings, LogOut, RotateCcw } from 'lucide-react';
+import { Send, Bot, Loader2, MoreVertical, Settings, LogOut, RotateCcw, Paperclip } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { ToolResultCard } from './ChatToolResults';
+import { ChatAttachCard } from './ChatAttachCard';
+import MiniMarkdown from '../ui/MiniMarkdown';
+
+const MIMES_ADJUNTABLES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 const SUGERENCIAS = [
   { label: 'Ver agenda de hoy', msg: '¿Qué turnos tengo hoy?' },
@@ -13,6 +18,22 @@ const SUGERENCIAS = [
 ];
 
 const STORAGE_KEY = 'chat_historial';
+
+// Detección directa por palabras clave para evitar depender de la IA en las
+// dos acciones más pedidas — el modelo gratuito es inconsistente siguiendo
+// la instrucción de "mostrar el formulario inmediatamente".
+const RE_NUEVO_PACIENTE = /\b(nuevo|nueva|registrar|cargar|crear|agregar|alta de)\b.{0,15}\bpaciente\b/i;
+const RE_NUEVO_TURNO = /\b(nuevo|nueva|agendar|sacar|pedir|crear|reservar)\b.{0,15}\b(turno|cita)\b/i;
+
+function detectarAccionLocal(texto) {
+  if (RE_NUEVO_PACIENTE.test(texto)) {
+    return { name: 'mostrar_formulario_paciente', result: { type: 'form', form: 'crear_paciente', prefill: {} } };
+  }
+  if (RE_NUEVO_TURNO.test(texto)) {
+    return { name: 'mostrar_formulario_turno', result: { type: 'form', form: 'crear_turno', prefill: {} } };
+  }
+  return null;
+}
 
 export default function ChatSidebar() {
   const { profesional, logout, isAdmin } = useAuthStore();
@@ -26,12 +47,42 @@ export default function ChatSidebar() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState([]); // File[] — no se persisten (no son serializables)
+  const [dragOver, setDragOver] = useState(false);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const dragCounter = useRef(0);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading, archivosAdjuntos]);
   useEffect(() => {
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch {}
   }, [messages]);
+
+  const agregarArchivos = (fileList) => {
+    const archivos = Array.from(fileList).filter(f => MIMES_ADJUNTABLES.includes(f.type));
+    const rechazados = fileList.length - archivos.length;
+    if (rechazados > 0) toast.error(`${rechazados} archivo(s) no soportado(s). Solo PDF o imágenes (JPG, PNG, WEBP).`);
+    if (archivos.length) setArchivosAdjuntos(prev => [...prev, ...archivos]);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragOver(false);
+    agregarArchivos(e.dataTransfer.files);
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    dragCounter.current += 1;
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) setDragOver(false);
+  };
 
   const enviar = async (texto) => {
     const limpio = texto.trim();
@@ -39,6 +90,19 @@ export default function ChatSidebar() {
     const historial = [...messages, { role: 'user', content: limpio }];
     setMessages(historial);
     setInput('');
+
+    const accionLocal = detectarAccionLocal(limpio);
+    if (accionLocal) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: accionLocal.name === 'mostrar_formulario_paciente'
+          ? 'Completá los datos del paciente:'
+          : 'Completá los datos del turno:',
+        tool_results: [accionLocal]
+      }]);
+      return;
+    }
+
     setLoading(true);
     try {
       const { data } = await api.post('/ia/chat', {
@@ -60,6 +124,7 @@ export default function ChatSidebar() {
 
   const nuevaConversacion = () => {
     setMessages([]);
+    setArchivosAdjuntos([]);
     try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
     setMenuOpen(false);
   };
@@ -67,7 +132,21 @@ export default function ChatSidebar() {
   const iniciales = `${profesional?.nombre?.[0] || ''}${profesional?.apellido?.[0] || ''}`;
 
   return (
-    <div className="w-full md:w-[380px] bg-sidebar flex flex-col flex-shrink-0 h-[55vh] md:h-full">
+    <div
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      className="relative w-full md:w-[380px] bg-sidebar flex flex-col flex-shrink-0 h-[55vh] md:h-full"
+    >
+      {dragOver && (
+        <div className="absolute inset-0 z-30 bg-primary-500/20 border-2 border-dashed border-primary-400 rounded-lg flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-xl px-4 py-3 shadow-lg flex items-center gap-2">
+            <Paperclip size={18} className="text-primary-600" />
+            <p className="text-sm font-medium text-gray-800">Soltá el archivo acá</p>
+          </div>
+        </div>
+      )}
       {/* Header usuario */}
       <div className="px-4 py-5 border-b border-sidebar-border flex items-center justify-between relative">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -144,12 +223,12 @@ export default function ChatSidebar() {
               )}
               <div className={`flex flex-col max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                 <div
-                  className={`rounded-xl px-3 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${
-                    isUser ? 'text-[#2a2a2a]' : 'bg-sidebar-bubble border border-sidebar-borderLight text-[#ded9e8]'
+                  className={`rounded-xl px-3 py-2.5 text-[13px] leading-relaxed ${
+                    isUser ? 'text-[#2a2a2a] whitespace-pre-wrap' : 'bg-sidebar-bubble border border-sidebar-borderLight text-[#ded9e8]'
                   }`}
                   style={isUser ? { background: '#f5c55e' } : undefined}
                 >
-                  {msg.content}
+                  {isUser ? msg.content : <MiniMarkdown text={msg.content} />}
                 </div>
                 {msg.tool_results?.map((tr, j) => (
                   <ToolResultCard key={j} name={tr.name} result={tr.result} />
@@ -158,6 +237,14 @@ export default function ChatSidebar() {
             </div>
           );
         })}
+
+        {archivosAdjuntos.map((file, i) => (
+          <div key={i} className="flex gap-2 justify-end">
+            <div className="flex flex-col max-w-[85%] items-end">
+              <ChatAttachCard file={file} />
+            </div>
+          </div>
+        ))}
 
         {loading && (
           <div className="flex gap-2">
@@ -173,6 +260,22 @@ export default function ChatSidebar() {
       {/* Input */}
       <div className="p-4 border-t border-sidebar-border bg-sidebar-header">
         <div className="flex gap-2 items-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            className="hidden"
+            onChange={(e) => { agregarArchivos(e.target.files); e.target.value = ''; }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            title="Adjuntar archivo"
+            className="text-[#9891a8] hover:text-[#f2eef7] disabled:opacity-50 rounded-lg px-2.5 py-2.5 transition-colors flex-shrink-0"
+          >
+            <Paperclip size={16} />
+          </button>
           <input
             type="text"
             value={input}

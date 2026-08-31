@@ -6,14 +6,16 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, Mail, FileText, Calendar,
-  ArrowLeftRight, Paperclip, ChevronRight, Plus, Sparkles, Loader, Trash2
+  ArrowLeftRight, Paperclip, ChevronRight, Plus, Sparkles, Loader, Trash2, ClipboardList
 } from 'lucide-react';
 import Modal from '../components/ui/Modal';
 import FileUpload from '../components/ui/FileUpload';
+import MiniMarkdown from '../components/ui/MiniMarkdown';
 import api from '../services/api';
 
 const TABS = [
   { id: 'historial', label: 'Historial', icon: FileText },
+  { id: 'evaluaciones', label: 'Evaluaciones', icon: ClipboardList },
   { id: 'turnos', label: 'Turnos', icon: Calendar },
   { id: 'derivaciones', label: 'Derivaciones', icon: ArrowLeftRight },
   { id: 'archivos', label: 'Archivos', icon: Paperclip },
@@ -70,6 +72,12 @@ export default function PacienteDetallePage() {
     queryKey: ['paciente-sesiones', id],
     queryFn: () => api.get(`/pacientes/${id}/sesiones`).then(r => r.data),
     enabled: tab === 'historial'
+  });
+
+  const { data: evaluaciones } = useQuery({
+    queryKey: ['paciente-evaluaciones', id],
+    queryFn: () => api.get(`/evaluaciones/paciente/${id}`).then(r => r.data),
+    enabled: tab === 'evaluaciones'
   });
 
   const { data: turnos } = useQuery({
@@ -302,6 +310,51 @@ export default function PacienteDetallePage() {
         </div>
       )}
 
+      {/* Tab: Evaluaciones */}
+      {tab === 'evaluaciones' && (
+        <div className="space-y-3">
+          <Link
+            to={`/evaluaciones/nueva?paciente_id=${id}`}
+            className="flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          >
+            <Plus size={16} />
+            Nueva evaluación
+          </Link>
+
+          <div className="space-y-2">
+            {evaluaciones?.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <ClipboardList size={40} className="mx-auto mb-2" />
+                <p>Sin evaluaciones registradas</p>
+              </div>
+            ) : evaluaciones?.map(ev => (
+              <Link
+                key={ev.id}
+                to={`/evaluaciones/${ev.id}`}
+                className="block bg-white rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900">
+                        {format(new Date(ev.fecha_evaluacion), "d 'de' MMMM yyyy", { locale: es })}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${ev.estado === 'finalizado' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {ev.estado === 'finalizado' ? 'Finalizado' : 'Borrador'}
+                      </span>
+                    </div>
+                    {ev.motivo_consulta && (
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{ev.motivo_consulta}</p>
+                    )}
+                  </div>
+                  <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tab: Turnos */}
       {tab === 'turnos' && (
         <div className="space-y-2">
@@ -447,7 +500,7 @@ export default function PacienteDetallePage() {
                 <p className="text-xs font-medium text-primary-600 mb-2 flex items-center gap-1">
                   <Sparkles size={12} /> Análisis de Gemini
                 </p>
-                <p className="text-sm text-primary-900 leading-relaxed whitespace-pre-wrap">{modalPDF.analisis}</p>
+                <MiniMarkdown text={modalPDF.analisis} className="text-sm text-primary-900 leading-relaxed" />
               </div>
             ) : (
               <p className="text-sm text-gray-500">Gemini leerá el documento y extraerá la información clínica relevante.</p>

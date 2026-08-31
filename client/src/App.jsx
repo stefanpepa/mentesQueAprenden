@@ -17,6 +17,8 @@ import SesionDetallePage from './pages/SesionDetallePage';
 import DerivacionesPage from './pages/DerivacionesPage';
 import PagosPage from './pages/PagosPage';
 import AdminPage from './pages/AdminPage';
+import NuevaEvaluacionPage from './pages/NuevaEvaluacionPage';
+import EvaluacionDetallePage from './pages/EvaluacionDetallePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +58,8 @@ export default function App() {
                     <Route path="/agenda" element={<AgendaPage />} />
                     <Route path="/sesiones/nueva" element={<NuevaSesionPage />} />
                     <Route path="/sesiones/:id" element={<SesionDetallePage />} />
+                    <Route path="/evaluaciones/nueva" element={<NuevaEvaluacionPage />} />
+                    <Route path="/evaluaciones/:id" element={<EvaluacionDetallePage />} />
                     <Route path="/derivaciones" element={<DerivacionesPage />} />
                     <Route path="/pagos" element={<PagosPage />} />
                     <Route path="/admin" element={<AdminPage />} />

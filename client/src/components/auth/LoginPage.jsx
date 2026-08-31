@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Eye, EyeOff, Mail, Lock, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Loader2, ArrowLeft, CheckCircle2, Brain } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../services/api';
+import Balatro from '../ui/Balatro';
 
 function ForgotPasswordForm({ onBack }) {
   const [email, setEmail] = useState('');
@@ -101,23 +102,36 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #f6f0fb 0%, #eee0f7 50%, #f5e8f9 100%)' }}
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{ background: '#f6f0fb' }}
     >
+      <div className="absolute inset-0 opacity-40">
+        <Balatro
+          color1="#9b5de5"
+          color2="#c5a3f0"
+          color3="#f6f0fb"
+          spinSpeed={2.5}
+          contrast={2}
+          lighting={0.3}
+          spinAmount={0.2}
+          mouseInteraction={false}
+        />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="bg-white rounded-2xl shadow-xl shadow-primary-900/5 w-full max-w-md p-8 border border-primary-100/50"
+        className="relative z-10 bg-white rounded-2xl shadow-xl shadow-primary-900/5 w-full max-w-md p-8 border border-primary-100/50"
       >
         <div className="text-center mb-8">
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md shadow-primary-500/20"
             style={{ background: 'linear-gradient(135deg, #9b5de5 0%, #8347d1 100%)' }}
           >
-            <span className="text-white text-2xl font-bold">C</span>
+            <Brain className="text-white" size={30} strokeWidth={2} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Centro de Salud</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Mentes que Aprenden</h1>
           <p className="text-gray-500 text-sm mt-1">Gestión Clínica Interdisciplinaria</p>
         </div>
 

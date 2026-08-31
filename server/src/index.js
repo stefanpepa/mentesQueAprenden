@@ -15,6 +15,7 @@ const obrasSocialesRoutes = require('./routes/obrasSociales');
 const turnosRoutes = require('./routes/turnos');
 const pagosRoutes = require('./routes/pagos');
 const iaRoutes = require('./routes/ia');
+const evaluacionesRoutes = require('./routes/evaluaciones');
 const { iniciarReminderJob } = require('./services/reminderJob');
 
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/obras-sociales', obrasSocialesRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/pagos', pagosRoutes);
 app.use('/api/ia', iaRoutes);
+app.use('/api/evaluaciones', evaluacionesRoutes);
 
 // 404
 app.use((req, res) => {

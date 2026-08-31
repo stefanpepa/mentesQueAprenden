@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, addMonths, subMonths, format, getDay,
   isToday as isTodayFns, startOfDay, endOfDay, parseISO
@@ -11,24 +11,34 @@ import api from '../services/api';
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB', 'DOM'];
 
-const ESTADO_ESTILOS = {
-  activo: { label: 'Activo', bg: '#e8f5f0', color: '#2f8f6e' },
-  derivado: { label: 'Derivado', bg: '#fdece0', color: '#c76a2e' },
-  alta: { label: 'Alta', bg: '#eaf1fa', color: '#3a6ea5' },
-  inactivo: { label: 'Inactivo', bg: '#f0f0f0', color: '#767676' }
+const ESTADO_BADGE = {
+  activo: 'bg-green-100 text-green-700',
+  derivado: 'bg-amber-100 text-amber-700',
+  alta: 'bg-blue-100 text-blue-700',
+  inactivo: 'bg-gray-100 text-gray-600'
 };
 
+const ESTADO_LABEL = {
+  activo: 'Activo',
+  derivado: 'Derivado',
+  alta: 'Alta',
+  inactivo: 'Inactivo'
+};
+
+const AVATAR_GRADIENTES = [
+  'linear-gradient(135deg, #f5c55e 0%, #fdd89b 100%)',
+  'linear-gradient(135deg, #e97979 0%, #f5a4a4 100%)',
+  'linear-gradient(135deg, #7ba9d6 0%, #b0d4f1 100%)',
+  'linear-gradient(135deg, #9b5de5 0%, #c5a3f0 100%)',
+  'linear-gradient(135deg, #fda769 0%, #fcc5a0 100%)'
+];
+
 function avatarGradient(seed) {
-  const gradientes = [
-    'linear-gradient(135deg, #f5c55e 0%, #fdd89b 100%)',
-    'linear-gradient(135deg, #e97979 0%, #f5a4a4 100%)',
-    'linear-gradient(135deg, #7ba9d6 0%, #b0d4f1 100%)',
-    'linear-gradient(135deg, #9b5de5 0%, #c5a3f0 100%)',
-    'linear-gradient(135deg, #fda769 0%, #fcc5a0 100%)'
-  ];
-  const idx = (seed || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % gradientes.length;
-  return gradientes[idx];
+  const idx = (seed || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_GRADIENTES.length;
+  return AVATAR_GRADIENTES[idx];
 }
+
+const TURNO_BORDES = ['border-l-amber-400 bg-amber-50', 'border-l-red-400 bg-red-50', 'border-l-blue-400 bg-blue-50'];
 
 /* ---------- Card: Agenda ---------- */
 function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
@@ -82,11 +92,11 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
     <div
       onClick={onToggle}
       style={{ flexGrow: grow }}
-      className="flex-1 min-w-[260px] flex flex-col bg-white border border-primary-100 rounded-lg overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
+      className="flex-1 min-w-[260px] flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
     >
       <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900">Agenda de hoy</h2>
-        <span className="text-xs font-semibold text-primary-500">{expanded ? 'Cerrar ✕' : 'Ver calendario →'}</span>
+        <span className="text-xs font-semibold text-primary-600">{expanded ? 'Cerrar ✕' : 'Ver calendario →'}</span>
       </div>
 
       {!expanded && (
@@ -94,34 +104,26 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
           {(!turnosHoy || turnosHoy.length === 0) && (
             <p className="text-sm text-gray-400 text-center py-6">Sin turnos para hoy.</p>
           )}
-          {turnosHoy?.map((t, i) => {
-            const colores = [
-              { bg: '#fdf6e6', border: '#f5c55e' },
-              { bg: '#fbeaea', border: '#e97979' },
-              { bg: '#eaf1fa', border: '#7ba9d6' }
-            ][i % 3];
-            return (
-              <div
-                key={t.id}
-                onClick={(e) => { stop(e); onOpenTurno(t); }}
-                style={{ background: colores.bg, borderLeftColor: colores.border }}
-                className="flex gap-2.5 px-3 py-2.5 rounded border-l-4 cursor-pointer hover:brightness-95 transition-all"
-              >
-                <div className="flex-shrink-0">
-                  <div className="text-[13px] font-semibold text-primary-500">{format(parseISO(t.fecha_inicio), 'HH:mm')}</div>
-                  <div className="text-[10px] text-gray-400">
-                    {Math.round((parseISO(t.fecha_fin) - parseISO(t.fecha_inicio)) / 60000)} min
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-gray-900 truncate">
-                    {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
-                  </p>
-                  <p className="text-[11px] text-gray-500 truncate">{t.tipo}</p>
+          {turnosHoy?.map((t, i) => (
+            <div
+              key={t.id}
+              onClick={(e) => { stop(e); onOpenTurno(t); }}
+              className={`flex gap-2.5 px-3 py-2.5 rounded-xl border-l-4 cursor-pointer hover:brightness-95 transition-all ${TURNO_BORDES[i % 3]}`}
+            >
+              <div className="flex-shrink-0">
+                <div className="text-sm font-semibold text-primary-600">{format(parseISO(t.fecha_inicio), 'HH:mm')}</div>
+                <div className="text-xs text-gray-400">
+                  {Math.round((parseISO(t.fecha_fin) - parseISO(t.fecha_inicio)) / 60000)} min
                 </div>
               </div>
-            );
-          })}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{t.tipo}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -134,7 +136,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
             >
               <ChevronLeft size={15} />
             </button>
-            <h1 className="text-lg font-bold text-primary-700 min-w-[160px] text-center">
+            <h1 className="text-lg font-bold text-gray-900 min-w-[160px] text-center">
               {MESES[mesActual.getMonth()]} {mesActual.getFullYear()}
             </h1>
             <button
@@ -159,15 +161,15 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
                 <div
                   key={dia.key}
                   onClick={(e) => { stop(e); setDiaSeleccionado(dia); }}
-                  className={`border-[1.5px] rounded-lg p-1 cursor-pointer transition-all overflow-hidden ${
-                    seleccionado ? 'border-primary-500 bg-primary-50' : dia.esHoy ? 'border-teal-400 bg-teal-50' : 'border-[#ece4d4] bg-[#fdfbf6] hover:border-primary-300'
+                  className={`border rounded-lg p-1 cursor-pointer transition-all overflow-hidden ${
+                    seleccionado ? 'border-primary-500 bg-primary-50' : dia.esHoy ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-gray-50 hover:border-primary-300'
                   }`}
                 >
-                  <div className={`text-[11px] font-semibold ${dia.esHoy ? 'text-teal-600' : dia.esDomingo ? 'text-orange-400' : 'text-gray-900'}`}>
+                  <div className={`text-xs font-semibold ${dia.esHoy ? 'text-teal-600' : dia.esDomingo ? 'text-orange-400' : 'text-gray-900'}`}>
                     {dia.dia}
                   </div>
                   {dia.turnos.length > 0 && (
-                    <div className="text-[8px] text-gray-500 mt-0.5 flex flex-col gap-0.5">
+                    <div className="text-[10px] text-gray-500 mt-0.5 flex flex-col gap-0.5">
                       <div className="px-1 bg-gray-100 rounded truncate">
                         {dia.turnos[0].paciente ? dia.turnos[0].paciente.apellido : '—'}
                       </div>
@@ -182,8 +184,8 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
           </div>
 
           {diaSeleccionado && (
-            <div className="mt-2 px-5 pb-1 pt-4 border-t-2 border-gray-100 flex flex-col gap-3">
-              <h3 className="text-sm font-semibold text-primary-700 mb-1">
+            <div className="mt-2 px-5 pb-1 pt-4 border-t border-gray-100 flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">
                 Turnos del {diaSeleccionado.dia} de {MESES[mesActual.getMonth()]}
               </h3>
               {turnosDelDiaSeleccionado.length === 0 && (
@@ -193,13 +195,13 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
                 <div
                   key={t.id}
                   onClick={() => onOpenTurno(t)}
-                  className="bg-[#fdfbf6] border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition-all"
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-3 cursor-pointer hover:bg-gray-100 transition-all"
                 >
-                  <div className="text-[13px] font-semibold text-primary-500">{format(parseISO(t.fecha_inicio), 'HH:mm')}</div>
+                  <div className="text-sm font-semibold text-primary-600">{format(parseISO(t.fecha_inicio), 'HH:mm')}</div>
                   <div className="text-xs font-medium text-gray-900 mt-0.5">
                     {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">{t.tipo}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{t.tipo}</div>
                 </div>
               ))}
             </div>
@@ -214,7 +216,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
 function PacientesCard({ grow, expanded, onToggle, onOpenPaciente }) {
   const [busqueda, setBusqueda] = useState('');
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['pacientes-inicio', busqueda],
     queryFn: () => api.get('/pacientes', { params: { limit: 50, busqueda: busqueda || undefined } }).then(r => r.data?.data || [])
   });
@@ -225,59 +227,61 @@ function PacientesCard({ grow, expanded, onToggle, onOpenPaciente }) {
     <div
       onClick={onToggle}
       style={{ flexGrow: grow }}
-      className="flex-1 min-w-[260px] flex flex-col bg-white border border-primary-100 rounded-lg overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
+      className="flex-1 min-w-[260px] flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm cursor-pointer transition-[flex-grow] duration-300"
     >
       <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900">Tus pacientes</h2>
         <Link
           to="/pacientes/nuevo"
           onClick={stop}
-          className="bg-primary-500 hover:bg-primary-600 text-white rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors"
+          className="flex items-center gap-1 bg-primary-600 hover:bg-primary-700 text-white rounded-xl px-3 py-1.5 text-xs font-medium transition-colors"
         >
-          + Nuevo
+          <Plus size={12} /> Nuevo
         </Link>
       </div>
 
       <div className="px-5 pb-3" onClick={stop}>
-        <input
-          type="text"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar..."
-          className="w-full border border-primary-100 rounded-md px-2.5 py-2 text-xs bg-primary-50/40 focus:outline-none focus:border-primary-400"
-        />
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full border border-gray-300 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         <div className="flex flex-col gap-2">
-          {(data || []).map(p => {
-            const estadoEstilo = ESTADO_ESTILOS[p.estado] || ESTADO_ESTILOS.inactivo;
-            return (
-              <div
-                key={p.id}
-                onClick={(e) => { stop(e); onOpenPaciente(p.id); }}
-                className="bg-primary-50/40 border border-primary-100 rounded-md px-3 py-2.5 cursor-pointer hover:bg-primary-50 transition-all"
-              >
-                <div className="flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: avatarGradient(p.nombre + p.apellido) }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 truncate">{p.apellido}, {p.nombre}</p>
-                    <p className="text-[11px] text-gray-500 truncate mt-0.5">{p.motivo_consulta || p.obra_social?.nombre || '—'}</p>
-                    <p className="text-[10px] text-gray-400 truncate mt-0.5">DNI {p.dni}</p>
-                    {expanded && (
-                      <span
-                        className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: estadoEstilo.bg, color: estadoEstilo.color }}
-                      >
-                        {estadoEstilo.label}
-                      </span>
-                    )}
-                  </div>
+          {isLoading && (
+            <div className="space-y-2 px-2 animate-pulse">
+              {[1, 2, 3].map(i => <div key={i} className="h-14 bg-gray-100 rounded-xl" />)}
+            </div>
+          )}
+          {!isLoading && (data || []).map(p => (
+            <div
+              key={p.id}
+              onClick={(e) => { stop(e); onOpenPaciente(p.id); }}
+              className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-primary-50 hover:border-primary-100 transition-all"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: avatarGradient(p.nombre + p.apellido) }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{p.apellido}, {p.nombre}</p>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{p.motivo_consulta || p.obra_social?.nombre || '—'}</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">DNI {p.dni}</p>
+                  {expanded && (
+                    <span className={`inline-block mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] || ESTADO_BADGE.inactivo}`}>
+                      {ESTADO_LABEL[p.estado] || ESTADO_LABEL.inactivo}
+                    </span>
+                  )}
                 </div>
               </div>
-            );
-          })}
-          {(!data || data.length === 0) && (
+            </div>
+          ))}
+          {!isLoading && (!data || data.length === 0) && (
             <p className="text-sm text-gray-400 text-center py-6">Sin pacientes.</p>
           )}
         </div>
