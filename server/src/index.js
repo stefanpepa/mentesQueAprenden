@@ -16,10 +16,8 @@ const turnosRoutes = require('./routes/turnos');
 const pagosRoutes = require('./routes/pagos');
 const iaRoutes = require('./routes/ia');
 const evaluacionesRoutes = require('./routes/evaluaciones');
-const { iniciarReminderJob } = require('./services/reminderJob');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Seguridad
 app.use(helmet());
@@ -43,11 +41,12 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Rate limiting estricto para auth
+// Rate limiting estricto para auth (solo cuenta intentos fallidos)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'Demasiados intentos de login' }
+  max: 20,
+  skipSuccessfulRequests: true,
+  message: { error: 'Demasiados intentos de login. Esperá unos minutos e intentá de nuevo.' }
 });
 
 // Parseo
@@ -86,11 +85,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Error interno del servidor' });
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT} [${process.env.NODE_ENV}]`);
-  if (process.env.NODE_ENV !== 'test') iniciarReminderJob();
 });
 
 module.exports = app;

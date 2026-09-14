@@ -23,7 +23,7 @@ export default function AdminPage() {
     matricula: '', porcentaje_honorarios: 70
   });
 
-  const { data: profesionales } = useQuery({
+  const { data: profesionales, isLoading: cargandoProfesionales } = useQuery({
     queryKey: ['profesionales-admin'],
     queryFn: () => api.get('/profesionales').then(r => r.data)
   });
@@ -87,7 +87,14 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-2">
-            {profesionales?.map(prof => (
+            {cargandoProfesionales ? (
+              [...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl p-4 animate-pulse">
+                  <div className="h-5 bg-gray-200 rounded w-1/3 mb-2" />
+                  <div className="h-4 bg-gray-100 rounded w-1/2" />
+                </div>
+              ))
+            ) : profesionales?.map(prof => (
               <div key={prof.id} className={`bg-white rounded-2xl border p-4 flex items-center gap-4 ${!prof.activo ? 'opacity-50 border-gray-100' : 'border-gray-100'}`}>
                 <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-primary-700 font-semibold text-sm">
@@ -129,16 +136,13 @@ export default function AdminPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-semibold text-gray-900 mb-4">Configuración del espacio</h2>
           <p className="text-sm text-gray-500">
-            La configuración de WhatsApp (token, phone ID) y del porcentaje de honorarios
-            se gestiona desde las variables de entorno del servidor y la tabla
+            La configuración del porcentaje de honorarios se gestiona desde la tabla
             <code className="bg-gray-100 px-1 rounded text-xs ml-1">configuracion_espacio</code> en Supabase.
           </p>
           <div className="mt-4 bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-700">
             <p className="font-medium mb-1">Variables de entorno necesarias:</p>
             <ul className="space-y-1 text-xs font-mono">
-              <li>ANTHROPIC_API_KEY — para asistencia IA</li>
-              <li>WHATSAPP_TOKEN — token de Meta Cloud API</li>
-              <li>WHATSAPP_PHONE_ID — ID del número de WhatsApp</li>
+              <li>OPENROUTER_API_KEY — para asistencia IA</li>
             </ul>
           </div>
         </div>

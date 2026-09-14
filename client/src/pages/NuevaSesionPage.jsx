@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import IAAssistant from '../components/ui/IAAssistant';
@@ -51,7 +52,8 @@ export default function NuevaSesionPage() {
     mutationFn: (data) => api.post('/sesiones', data),
     onSuccess: (res) => {
       setSesionCreada(res.data);
-    }
+    },
+    onError: (err) => toast.error(err?.response?.data?.error || 'Error al guardar la sesión')
   });
 
   const resumirMutation = useMutation({
@@ -194,12 +196,6 @@ export default function NuevaSesionPage() {
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
             <h2 className="font-semibold text-gray-900 mb-3">Archivos adjuntos</h2>
             <FileUpload pacienteId={pacienteId} />
-          </div>
-        )}
-
-        {mutation.isError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm">
-            {mutation.error?.response?.data?.error || 'Error al guardar la sesión'}
           </div>
         )}
 

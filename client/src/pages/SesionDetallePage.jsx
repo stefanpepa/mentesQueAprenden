@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Save, Clock, Sparkles, History } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, History } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -84,7 +84,7 @@ export default function SesionDetallePage() {
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             {format(new Date(sesion.fecha), "d 'de' MMMM yyyy", { locale: es })}
           </h1>
           <p className="text-sm text-gray-500">

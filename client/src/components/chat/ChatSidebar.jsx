@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Send, Bot, Loader2, MoreVertical, Settings, LogOut, RotateCcw, Paperclip } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Send, Bot, Loader2, MoreVertical, Settings, LogOut, RotateCcw, Paperclip, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -38,6 +39,13 @@ function detectarAccionLocal(texto) {
 export default function ChatSidebar() {
   const { profesional, logout, isAdmin } = useAuthStore();
   const navigate = useNavigate();
+
+  const { data: derivacionesPendientes } = useQuery({
+    queryKey: ['derivaciones-pendientes'],
+    queryFn: () => api.get('/derivaciones/pendientes').then(r => r.data),
+    refetchInterval: 20000
+  });
+  const cantidadPendientes = derivacionesPendientes?.length || 0;
   const [messages, setMessages] = useState(() => {
     try {
       const guardado = sessionStorage.getItem(STORAGE_KEY);
@@ -140,7 +148,7 @@ export default function ChatSidebar() {
       className="relative w-full md:w-[380px] bg-sidebar flex flex-col flex-shrink-0 h-[55vh] md:h-full"
     >
       {dragOver && (
-        <div className="absolute inset-0 z-30 bg-primary-500/20 border-2 border-dashed border-primary-400 rounded-lg flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-30 bg-primary-500/20 border-2 border-dashed border-primary-400 rounded-xl flex items-center justify-center pointer-events-none">
           <div className="bg-white rounded-xl px-4 py-3 shadow-lg flex items-center gap-2">
             <Paperclip size={18} className="text-primary-600" />
             <p className="text-sm font-medium text-gray-800">Soltá el archivo acá</p>
@@ -178,6 +186,14 @@ export default function ChatSidebar() {
               <button onClick={nuevaConversacion} className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-primary-50">
                 <RotateCcw size={16} /> Nueva conversación
               </button>
+              <Link to="/derivaciones" onClick={() => setMenuOpen(false)} className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-primary-50">
+                <span className="flex items-center gap-2.5"><ArrowLeftRight size={16} /> Derivaciones</span>
+                {cantidadPendientes > 0 && (
+                  <span className="bg-amber-500 text-white text-xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                    {cantidadPendientes}
+                  </span>
+                )}
+              </Link>
               {isAdmin() && (
                 <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-primary-50">
                   <Settings size={16} /> Administración
@@ -192,6 +208,18 @@ export default function ChatSidebar() {
           </>
         )}
       </div>
+
+      {cantidadPendientes > 0 && (
+        <Link
+          to="/derivaciones"
+          className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border-b border-amber-100 text-amber-800 text-sm hover:bg-amber-100 transition-colors flex-shrink-0"
+        >
+          <ArrowLeftRight size={16} className="flex-shrink-0" />
+          <span className="flex-1">
+            Tenés {cantidadPendientes} {cantidadPendientes === 1 ? 'derivación pendiente' : 'derivaciones pendientes'} de aceptar
+          </span>
+        </Link>
+      )}
 
       {/* Mensajes */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
@@ -272,7 +300,7 @@ export default function ChatSidebar() {
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
             title="Adjuntar archivo"
-            className="text-[#9891a8] hover:text-[#f2eef7] disabled:opacity-50 rounded-lg px-2.5 py-2.5 transition-colors flex-shrink-0"
+            className="text-[#9891a8] hover:text-[#f2eef7] disabled:opacity-50 rounded-xl px-2.5 py-2.5 transition-colors flex-shrink-0"
           >
             <Paperclip size={16} />
           </button>
@@ -283,12 +311,12 @@ export default function ChatSidebar() {
             onKeyDown={handleKey}
             disabled={loading}
             placeholder="Pregunta algo..."
-            className="flex-1 border border-sidebar-borderLight rounded-lg px-3 py-2.5 text-[13px] text-[#f2eef7] bg-sidebar-bubble placeholder:text-[#7a7288] focus:outline-none focus:border-primary-500 disabled:opacity-60"
+            className="flex-1 border border-sidebar-borderLight rounded-xl px-3 py-2.5 text-[13px] text-[#f2eef7] bg-sidebar-bubble placeholder:text-[#7a7288] focus:outline-none focus:border-primary-500 disabled:opacity-60"
           />
           <button
             onClick={() => enviar(input)}
             disabled={!input.trim() || loading}
-            className="bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-[13px] font-medium transition-colors flex-shrink-0"
+            className="bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-[13px] font-medium transition-colors flex-shrink-0"
           >
             <Send size={14} />
           </button>

@@ -6,6 +6,12 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
       },
+      keyframes: {
+        crecer: {
+          '0%': { transform: 'scaleX(0)', opacity: '0.4' },
+          '100%': { transform: 'scaleX(1)', opacity: '1' }
+        }
+      },
       colors: {
         primary: {
           50: '#f6f0fb',

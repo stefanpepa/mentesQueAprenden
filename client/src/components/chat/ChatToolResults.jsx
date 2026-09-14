@@ -82,7 +82,7 @@ export function PacienteFormCard({ prefill = {} }) {
         type={type}
         value={form[key]}
         onChange={set(key)}
-        className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+        className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
       />
     </div>
   );
@@ -104,13 +104,13 @@ export function PacienteFormCard({ prefill = {} }) {
           value={form.motivo_consulta}
           onChange={set('motivo_consulta')}
           rows={2}
-          className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+          className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
         />
       </div>
       <button
         type="submit"
         disabled={saving}
-        className="w-full py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+        className="w-full py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
       >
         {saving ? 'Guardando...' : 'Guardar paciente'}
       </button>
@@ -128,6 +128,7 @@ export function TurnoFormCard({ prefill = {} }) {
     fecha_inicio: prefill.fecha_inicio || hoy,
     tipo: prefill.tipo || 'tratamiento',
     duracion_minutos: prefill.duracion_minutos || 50,
+    consultorio: prefill.consultorio || 1,
     notas: prefill.notas || '',
   });
   const [pacientes, setPacientes] = useState([]);
@@ -169,6 +170,7 @@ export function TurnoFormCard({ prefill = {} }) {
         fecha_inicio: inicio.toISOString(),
         fecha_fin: fin.toISOString(),
         tipo: form.tipo,
+        consultorio: Number(form.consultorio),
         notas: form.notas || undefined,
       });
       setTurno(data);
@@ -216,7 +218,7 @@ export function TurnoFormCard({ prefill = {} }) {
           value={form.paciente_busqueda}
           onChange={(e) => buscarPaciente(e.target.value)}
           placeholder="Buscar por nombre o DNI..."
-          className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
         {buscando && <p className="text-xs text-gray-400 mt-1">Buscando...</p>}
         {!buscando && !form.paciente_id && form.paciente_busqueda.length >= 2 && pacientes.length === 0 && (
@@ -226,7 +228,7 @@ export function TurnoFormCard({ prefill = {} }) {
           </p>
         )}
         {pacientes.length > 0 && (
-          <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+          <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-10">
             {pacientes.map(p => (
               <button key={p.id} type="button" onClick={() => seleccionarPaciente(p)}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors">
@@ -241,30 +243,37 @@ export function TurnoFormCard({ prefill = {} }) {
         <div className="col-span-2 flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Fecha y hora <span className="text-red-500">*</span></label>
           <input type="datetime-local" value={form.fecha_inicio} onChange={set('fecha_inicio')}
-            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500" />
+            className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Tipo</label>
           <select value={form.tipo} onChange={set('tipo')}
-            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
+            className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
             {TIPOS.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Duración (min)</label>
           <input type="number" value={form.duracion_minutos} onChange={set('duracion_minutos')} min={15} max={180}
-            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500" />
+            className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600">Consultorio</label>
+          <select value={form.consultorio} onChange={set('consultorio')}
+            className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
+            {[1, 2, 3].map(n => <option key={n} value={n}>Consultorio {n}</option>)}
+          </select>
         </div>
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-gray-600">Notas</label>
         <textarea value={form.notas} onChange={set('notas')} rows={2}
-          className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none" />
+          className="px-2.5 py-1.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none" />
       </div>
 
       <button type="submit" disabled={saving}
-        className="w-full py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+        className="w-full py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
         {saving ? 'Agendando...' : 'Agendar turno'}
       </button>
     </form>

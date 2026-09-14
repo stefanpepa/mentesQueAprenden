@@ -1,13 +1,10 @@
 const express = require('express');
-const { body, param, validationResult } = require('express-validator');
-const { requireAuth } = require('../middleware/auth');
-const { registrarAcceso } = require('../middleware/auditLog');
-const { getAuthenticatedClient } = require('../middleware/auth');
-const { supabaseAdmin } = require('../config/supabase');
+const { body, validationResult } = require('express-validator');
+const { requireAuth, getAuthenticatedClient } = require('../middleware/auth');
+const archivoService = require('../services/ArchivoService');
 
 const router = express.Router();
 
-const BUCKET = 'historias-clinicas';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME = [
   'application/pdf',
@@ -15,6 +12,11 @@ const ALLOWED_MIME = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ];
+
+function manejarError(res, err, fallback = { status: 500, message: 'Error interno' }) {
+  const status = err.status || fallback.status;
+  res.status(status).json({ error: err.status ? err.message : fallback.message });
+}
 
 // POST /archivos/upload-url - Genera una URL firmada para upload directo desde el cliente
 router.post('/upload-url',
@@ -30,62 +32,12 @@ router.post('/upload-url',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    const { paciente_id, nombre_original, mime_type, tamanio_bytes, tipo, sesion_id, descripcion } = req.body;
-
-    // Verificar acceso al paciente
-    const db = getAuthenticatedClient(req);
-    const { data: paciente } = await db
-      .from('pacientes')
-      .select('id')
-      .eq('id', paciente_id)
-      .single();
-
-    if (!paciente) return res.status(403).json({ error: 'Sin acceso a este paciente' });
-
-    // Derivar extensión desde mime_type (no del nombre enviado por el cliente)
-    const MIME_TO_EXT = {
-      'application/pdf': 'pdf',
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-      'image/webp': 'webp',
-      'application/msword': 'doc',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
-    };
-    const ext = MIME_TO_EXT[mime_type] || 'bin';
-    const nombre_storage = `${paciente_id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-    // URL firmada para upload (5 minutos)
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .createSignedUploadUrl(nombre_storage);
-
-    if (uploadError) return res.status(500).json({ error: uploadError.message });
-
-    // Registrar el archivo en la BD (pendiente hasta que se confirme el upload)
-    const { data: archivo, error: dbError } = await db
-      .from('archivos_adjuntos')
-      .insert({
-        paciente_id,
-        sesion_id,
-        nombre_original,
-        nombre_storage,
-        storage_path: nombre_storage,
-        tipo,
-        mime_type,
-        tamanio_bytes,
-        descripcion,
-        subido_por: req.profesional.id
-      })
-      .select()
-      .single();
-
-    if (dbError) return res.status(500).json({ error: dbError.message });
-
-    res.json({
-      archivo_id: archivo.id,
-      upload_url: uploadData.signedUrl,
-      token: uploadData.token
-    });
+    try {
+      const data = await archivoService.generarUrlSubida(getAuthenticatedClient(req), req.profesional.id, req.body);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 
@@ -93,33 +45,17 @@ router.post('/upload-url',
 router.get('/:id/download-url',
   requireAuth,
   async (req, res) => {
-    const db = getAuthenticatedClient(req);
-
-    const { data: archivo, error } = await db
-      .from('archivos_adjuntos')
-      .select('*, paciente:pacientes(id)')
-      .eq('id', req.params.id)
-      .single();
-
-    if (error || !archivo) return res.status(404).json({ error: 'Archivo no encontrado' });
-
-    // Log descarga
-    supabaseAdmin.from('logs_acceso').insert({
-      profesional_id: req.profesional.id,
-      paciente_id: archivo.paciente_id,
-      accion: 'descargar_archivo',
-      recurso: 'archivo:' + req.params.id,
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent'),
-      metadata: { nombre_original: archivo.nombre_original }
-    });
-
-    const { data: urlData, error: urlError } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .createSignedUrl(archivo.storage_path, 300); // 5 minutos
-
-    if (urlError) return res.status(500).json({ error: urlError.message });
-    res.json({ url: urlData.signedUrl, nombre_original: archivo.nombre_original });
+    try {
+      const data = await archivoService.obtenerUrlDescarga(
+        getAuthenticatedClient(req),
+        req.params.id,
+        req.profesional.id,
+        { ip: req.ip, userAgent: req.get('User-Agent') }
+      );
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 
@@ -127,26 +63,12 @@ router.get('/:id/download-url',
 router.delete('/:id',
   requireAuth,
   async (req, res) => {
-    const db = getAuthenticatedClient(req);
-
-    const { data: archivo } = await db
-      .from('archivos_adjuntos')
-      .select('storage_path, subido_por')
-      .eq('id', req.params.id)
-      .single();
-
-    if (!archivo) return res.status(404).json({ error: 'Archivo no encontrado' });
-    if (archivo.subido_por !== req.profesional.id && req.profesional.rol !== 'admin') {
-      return res.status(403).json({ error: 'Sin permiso para eliminar este archivo' });
+    try {
+      await archivoService.eliminar(getAuthenticatedClient(req), req.params.id, req.profesional);
+      res.json({ message: 'Archivo eliminado' });
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    // Eliminar del storage
-    await supabaseAdmin.storage.from(BUCKET).remove([archivo.storage_path]);
-
-    // Eliminar de la BD
-    await db.from('archivos_adjuntos').delete().eq('id', req.params.id);
-
-    res.json({ message: 'Archivo eliminado' });
   }
 );
 

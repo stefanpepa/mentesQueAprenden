@@ -146,7 +146,7 @@ export default function EvaluacionDetallePage() {
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             {format(new Date(evaluacion.fecha_evaluacion), "d 'de' MMMM yyyy", { locale: es })}
           </h1>
           <span className={`text-xs px-2 py-0.5 rounded-full ${evaluacion.estado === 'finalizado' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>

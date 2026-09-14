@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DollarSign, FileText, CheckCircle, Printer } from 'lucide-react';
+import { DollarSign, CheckCircle, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -21,12 +21,12 @@ export default function PagosPage() {
   const [modalPagar, setModalPagar] = useState(null);
   const [metodoPago, setMetodoPago] = useState('efectivo');
 
-  const { data: pendientes } = useQuery({
+  const { data: pendientes, isLoading: cargandoPendientes } = useQuery({
     queryKey: ['sesiones-pendientes'],
     queryFn: () => api.get('/pagos/sesiones-pendientes').then(r => r.data)
   });
 
-  const { data: pagos } = useQuery({
+  const { data: pagos, isLoading: cargandoPagos } = useQuery({
     queryKey: ['pagos', mes],
     queryFn: () => api.get('/pagos', { params: { mes } }).then(r => r.data)
   });
@@ -99,7 +99,14 @@ export default function PagosPage() {
       {/* Pendientes */}
       {tab === 'pendientes' && (
         <div className="space-y-2">
-          {!pendientes?.length ? (
+          {cargandoPendientes ? (
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl p-4 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-1/4" />
+              </div>
+            ))
+          ) : !pendientes?.length ? (
             <div className="text-center py-12 text-gray-400">
               <CheckCircle size={40} className="mx-auto mb-2 text-gray-200" />
               <p>Sin cobros pendientes</p>
@@ -131,7 +138,14 @@ export default function PagosPage() {
       {/* Cobrados */}
       {tab === 'cobrados' && (
         <div className="space-y-2">
-          {!pagos?.length ? (
+          {cargandoPagos ? (
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl p-4 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-1/4" />
+              </div>
+            ))
+          ) : !pagos?.length ? (
             <p className="text-center py-8 text-gray-400">Sin cobros en {mes}</p>
           ) : pagos.map(pago => (
             <div key={pago.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">

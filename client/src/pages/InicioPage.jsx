@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, ArrowLeftRight } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, addMonths, subMonths, format, getDay,
   isToday as isTodayFns, startOfDay, endOfDay, parseISO
 } from 'date-fns';
 import api from '../services/api';
+import { useDebounce } from '../hooks/useDebounce';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB', 'DOM'];
@@ -40,8 +41,95 @@ function avatarGradient(seed) {
 
 const TURNO_BORDES = ['border-l-amber-400 bg-amber-50', 'border-l-red-400 bg-red-50', 'border-l-blue-400 bg-blue-50'];
 
+// Fade in/out con CSS puro (sin motion) — el tooltip anterior con motion.div
+// tenía un transform propio que competía con el posicionamiento manual y
+// hacía que apareciera en lugares erráticos. Este monta en opacity-0 y pasa
+// a opacity-100 un frame después para que la transición se dispare.
+function TooltipConsultorio({ hover }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(false);
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [hover.x, hover.y, hover.texto]);
+
+  return (
+    <div
+      style={{ position: 'fixed', left: hover.x, top: hover.y - 8, transform: 'translate(-50%, -100%)', zIndex: 9999 }}
+      className="pointer-events-none"
+    >
+      <div
+        className={`px-2.5 py-1 bg-gray-900 text-white text-[11px] font-medium rounded-lg whitespace-nowrap shadow-lg relative transition-opacity duration-150 ${visible ? 'opacity-100' : 'opacity-0'}`}
+      >
+        {hover.texto}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-gray-900" />
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Card: Agenda ---------- */
-function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
+const CONSULTORIOS = [1, 2, 3];
+const HORA_INICIO_FRANJA = 7;
+const HORA_FIN_FRANJA = 21;
+
+// Barras horizontales 07:00–21:00 por consultorio, en rojo donde hay un turno
+// (propio o ajeno) ocupándolo hoy. Evita listar cada turno ajeno como fila —
+// solo importa saber, de un vistazo, cuándo hay lugar en cada consultorio.
+function DisponibilidadConsultorios({ turnos }) {
+  const totalMin = (HORA_FIN_FRANJA - HORA_INICIO_FRANJA) * 60;
+  const [hover, setHover] = useState(null); // { texto, x, y } | null
+
+  const segmentosPorConsultorio = useMemo(() => {
+    const map = {};
+    CONSULTORIOS.forEach(n => { map[n] = []; });
+    (turnos || []).forEach(t => {
+      if (t.estado === 'cancelado' || !CONSULTORIOS.includes(t.consultorio)) return;
+      const inicio = parseISO(t.fecha_inicio);
+      const fin = parseISO(t.fecha_fin);
+      const minInicio = Math.max(0, (inicio.getHours() * 60 + inicio.getMinutes()) - HORA_INICIO_FRANJA * 60);
+      const minFin = Math.min(totalMin, (fin.getHours() * 60 + fin.getMinutes()) - HORA_INICIO_FRANJA * 60);
+      if (minFin <= minInicio) return;
+      map[t.consultorio].push({
+        left: (minInicio / totalMin) * 100,
+        width: ((minFin - minInicio) / totalMin) * 100,
+        etiqueta: `${format(inicio, 'HH:mm')} a ${format(fin, 'HH:mm')}`
+      });
+    });
+    return map;
+  }, [turnos, totalMin]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {CONSULTORIOS.map(n => (
+        <div key={n} className="flex items-center gap-2.5">
+          <span className="text-[10px] font-semibold text-gray-500 w-14 flex-shrink-0">Consult. {n}</span>
+          <div className="relative flex-1 h-3 bg-green-100 rounded-full overflow-hidden shadow-inner">
+            {segmentosPorConsultorio[n].map((seg, i) => (
+              <div
+                key={i}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const margen = 95;
+                  const x = Math.min(Math.max(rect.left + rect.width / 2, margen), window.innerWidth - margen);
+                  setHover({ texto: `Consultorio ${n} · ${seg.etiqueta}`, x, y: rect.top });
+                }}
+                onMouseLeave={() => setHover(null)}
+                className="absolute top-0 bottom-0 bg-gradient-to-r from-red-400 to-red-500 cursor-help shadow-sm hover:brightness-110 transition-[filter,transform] duration-150 origin-left animate-[crecer_0.35s_ease-out]"
+                style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {hover && <TooltipConsultorio hover={hover} />}
+    </div>
+  );
+}
+
+function AgendaCard({ grow, expanded, onToggle, turnosHoy, consultoriosHoy, onOpenTurno }) {
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
@@ -58,7 +146,9 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
 
   const turnosPorDia = useMemo(() => {
     const map = {};
-    (turnosMes || []).forEach(t => {
+    // Los turnos ajenos ("ocupado") no se listan acá — solo indican disponibilidad
+    // de consultorio, no forman parte de la agenda personal del profesional.
+    (turnosMes || []).filter(t => !t.ocupado).forEach(t => {
       const key = format(parseISO(t.fecha_inicio), 'yyyy-MM-dd');
       (map[key] = map[key] || []).push(t);
     });
@@ -86,6 +176,13 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
 
   const turnosDelDiaSeleccionado = diaSeleccionado ? (turnosPorDia[diaSeleccionado.key] || []) : [];
 
+  // Incluye los turnos "ocupado" (ajenos) — a diferencia de turnosPorDia,
+  // esta lista alimenta el widget de disponibilidad por consultorio.
+  const consultoriosDelDiaSeleccionado = useMemo(() => {
+    if (!diaSeleccionado) return [];
+    return (turnosMes || []).filter(t => format(parseISO(t.fecha_inicio), 'yyyy-MM-dd') === diaSeleccionado.key);
+  }, [turnosMes, diaSeleccionado]);
+
   const stop = (e) => e.stopPropagation();
 
   return (
@@ -101,6 +198,9 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
 
       {!expanded && (
         <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+          <div className="pb-1">
+            <DisponibilidadConsultorios turnos={consultoriosHoy} />
+          </div>
           {(!turnosHoy || turnosHoy.length === 0) && (
             <p className="text-sm text-gray-400 text-center py-6">Sin turnos para hoy.</p>
           )}
@@ -120,7 +220,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{t.tipo}</p>
+                <p className="text-xs text-gray-500 truncate">{t.tipo} · Consultorio {t.consultorio}</p>
               </div>
             </div>
           ))}
@@ -188,6 +288,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
               <h3 className="text-sm font-semibold text-gray-900 mb-1">
                 Turnos del {diaSeleccionado.dia} de {MESES[mesActual.getMonth()]}
               </h3>
+              <DisponibilidadConsultorios turnos={consultoriosDelDiaSeleccionado} />
               {turnosDelDiaSeleccionado.length === 0 && (
                 <p className="text-xs text-gray-400">Sin turnos ese día.</p>
               )}
@@ -201,7 +302,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
                   <div className="text-xs font-medium text-gray-900 mt-0.5">
                     {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{t.tipo}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{t.tipo} · Consultorio {t.consultorio}</div>
                 </div>
               ))}
             </div>
@@ -215,10 +316,11 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, onOpenTurno }) {
 /* ---------- Card: Pacientes ---------- */
 function PacientesCard({ grow, expanded, onToggle, onOpenPaciente }) {
   const [busqueda, setBusqueda] = useState('');
+  const debouncedBusqueda = useDebounce(busqueda);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['pacientes-inicio', busqueda],
-    queryFn: () => api.get('/pacientes', { params: { limit: 50, busqueda: busqueda || undefined } }).then(r => r.data?.data || [])
+    queryKey: ['pacientes-inicio', debouncedBusqueda],
+    queryFn: () => api.get('/pacientes', { params: { limit: 50, busqueda: debouncedBusqueda || undefined } }).then(r => r.data?.data || [])
   });
 
   const stop = (e) => e.stopPropagation();
@@ -269,7 +371,12 @@ function PacientesCard({ grow, expanded, onToggle, onOpenPaciente }) {
               <div className="flex items-start gap-2.5">
                 <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: avatarGradient(p.nombre + p.apellido) }} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{p.apellido}, {p.nombre}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-1.5">
+                    <span className="truncate">{p.apellido}, {p.nombre}</span>
+                    {p.derivado && (
+                      <ArrowLeftRight size={12} className="text-primary-500 flex-shrink-0" title="Paciente derivado" />
+                    )}
+                  </p>
                   <p className="text-xs text-gray-500 truncate mt-0.5">{p.motivo_consulta || p.obra_social?.nombre || '—'}</p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">DNI {p.dni}</p>
                   {expanded && (
@@ -318,7 +425,8 @@ export default function InicioPage() {
         grow={agendaGrow}
         expanded={expandedBlock === 'agenda'}
         onToggle={() => setExpandedBlock(b => b === 'agenda' ? null : 'agenda')}
-        turnosHoy={turnosHoy}
+        turnosHoy={(turnosHoy || []).filter(t => !t.ocupado)}
+        consultoriosHoy={turnosHoy}
         onOpenTurno={irATurno}
       />
       <PacientesCard

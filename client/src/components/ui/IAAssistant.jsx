@@ -73,7 +73,7 @@ export default function IAAssistant({ pacienteId, sesionId, tipoSesion, especial
             <button
               type="button"
               onClick={aceptar}
-              className="flex items-center gap-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-xl font-medium transition-colors"
             >
               <CheckCircle size={14} />
               Aceptar

@@ -1,21 +1,23 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { supabaseAdmin } = require('../config/supabase');
-const { getAuthenticatedClient } = require('../middleware/auth');
+const profesionalService = require('../services/ProfesionalService');
 
 const router = express.Router();
 
+function manejarError(res, err, fallback = { status: 500, message: 'Error interno' }) {
+  const status = err.status || fallback.status;
+  res.status(status).json({ error: err.status ? err.message : fallback.message });
+}
+
 // GET /profesionales - Lista todos los profesionales activos
 router.get('/', requireAuth, async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('profesionales')
-    .select('id, nombre, apellido, especialidad, rol, matricula, activo, porcentaje_honorarios')
-    .eq('activo', true)
-    .order('apellido');
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const data = await profesionalService.listar();
+    res.json(data);
+  } catch (err) {
+    manejarError(res, err);
+  }
 });
 
 // PATCH /profesionales/:id - Actualizar datos propios o admin
@@ -29,41 +31,23 @@ router.patch('/:id',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    if (req.params.id !== req.profesional.id && req.profesional.rol !== 'admin') {
-      return res.status(403).json({ error: 'Sin permiso' });
+    try {
+      const data = await profesionalService.actualizar(req.params.id, req.profesional, req.body);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const CAMPOS_EDITABLES = ['nombre', 'apellido', 'matricula', 'especialidad', 'telefono', 'porcentaje_honorarios'];
-    const updateData = Object.fromEntries(
-      Object.entries(req.body).filter(([k]) => CAMPOS_EDITABLES.includes(k))
-    );
-
-    // Solo admin puede cambiar el porcentaje
-    if (updateData.porcentaje_honorarios !== undefined && req.profesional.rol !== 'admin') {
-      delete updateData.porcentaje_honorarios;
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('profesionales')
-      .update(updateData)
-      .eq('id', req.params.id)
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
   }
 );
 
 // DELETE (desactivar) /profesionales/:id - Solo admin
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { error } = await supabaseAdmin
-    .from('profesionales')
-    .update({ activo: false })
-    .eq('id', req.params.id);
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ message: 'Profesional desactivado' });
+  try {
+    await profesionalService.desactivar(req.params.id);
+    res.json({ message: 'Profesional desactivado' });
+  } catch (err) {
+    manejarError(res, err);
+  }
 });
 
 module.exports = router;

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '../services/api';
 
 export default function NuevoPacientePage() {
@@ -22,7 +23,8 @@ export default function NuevoPacientePage() {
 
   const mutation = useMutation({
     mutationFn: (data) => api.post('/pacientes', data),
-    onSuccess: (res) => navigate(`/pacientes/${res.data.id}`)
+    onSuccess: (res) => navigate(`/pacientes/${res.data.id}`),
+    onError: (err) => toast.error(err?.response?.data?.error || 'Error al guardar el paciente')
   });
 
   const onSubmit = (data) => mutation.mutate(data);
@@ -211,12 +213,6 @@ export default function NuevoPacientePage() {
             />
           </Field>
         </section>
-
-        {mutation.isError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm">
-            {mutation.error?.response?.data?.error || 'Error al guardar el paciente'}
-          </div>
-        )}
 
         <div className="flex gap-3 pb-8">
           <button

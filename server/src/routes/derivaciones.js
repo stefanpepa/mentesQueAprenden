@@ -1,9 +1,14 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
-const { requireAuth } = require('../middleware/auth');
-const { getAuthenticatedClient } = require('../middleware/auth');
+const { requireAuth, getAuthenticatedClient } = require('../middleware/auth');
+const derivacionService = require('../services/DerivacionService');
 
 const router = express.Router();
+
+function manejarError(res, err, fallback = { status: 500, message: 'Error interno' }) {
+  const status = err.status || fallback.status;
+  res.status(status).json({ error: err.status ? err.message : fallback.message });
+}
 
 // POST /derivaciones
 router.post('/',
@@ -17,41 +22,12 @@ router.post('/',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    if (req.body.profesional_destino_id === req.profesional.id) {
-      return res.status(422).json({ error: 'No podés derivar al mismo profesional' });
+    try {
+      const data = await derivacionService.crear(getAuthenticatedClient(req), req.profesional.id, req.body);
+      res.status(201).json(data);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const db = getAuthenticatedClient(req);
-
-    const { data: destino } = await db
-      .from('profesionales')
-      .select('id, activo')
-      .eq('id', req.body.profesional_destino_id)
-      .single();
-
-    if (!destino || !destino.activo) {
-      return res.status(422).json({ error: 'El profesional destinatario no existe o está inactivo' });
-    }
-
-    const { data, error } = await db
-      .from('derivaciones')
-      .insert({
-        paciente_id: req.body.paciente_id,
-        profesional_origen_id: req.profesional.id,
-        profesional_destino_id: req.body.profesional_destino_id,
-        motivo: req.body.motivo,
-        observaciones: req.body.observaciones
-      })
-      .select(`
-        *,
-        paciente:pacientes(id, nombre, apellido),
-        origen:profesionales!profesional_origen_id(id, nombre, apellido, especialidad),
-        destino:profesionales!profesional_destino_id(id, nombre, apellido, especialidad)
-      `)
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data);
   }
 );
 
@@ -67,79 +43,52 @@ router.patch('/:id/responder',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    const db = getAuthenticatedClient(req);
-
-    // Verificar que el profesional destino es quien responde
-    const { data: derivacion } = await db
-      .from('derivaciones')
-      .select('profesional_destino_id, estado')
-      .eq('id', req.params.id)
-      .single();
-
-    if (!derivacion) return res.status(404).json({ error: 'Derivación no encontrada' });
-    if (derivacion.profesional_destino_id !== req.profesional.id) {
-      return res.status(403).json({ error: 'Solo el profesional destinatario puede responder' });
+    try {
+      const data = await derivacionService.responder(getAuthenticatedClient(req), req.params.id, req.profesional.id, req.body);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
     }
-    if (derivacion.estado !== 'pendiente') {
-      return res.status(409).json({ error: 'Esta derivación ya fue respondida' });
+  }
+);
+
+// PATCH /derivaciones/:id/completar
+router.patch('/:id/completar',
+  requireAuth,
+  [param('id').isUUID()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    try {
+      const data = await derivacionService.completar(getAuthenticatedClient(req), req.params.id, req.profesional.id);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const { data, error } = await db
-      .from('derivaciones')
-      .update({
-        estado: req.body.estado,
-        observaciones: req.body.observaciones,
-        fecha_respuesta: new Date().toISOString(),
-        activa: req.body.estado === 'aceptada'
-      })
-      .eq('id', req.params.id)
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
   }
 );
 
 // GET /derivaciones - todas las del profesional (enviadas + recibidas)
 router.get('/', requireAuth, async (req, res) => {
-  const db = getAuthenticatedClient(req);
-  const profId = req.profesional.id;
-
-  const { data, error } = await db
-    .from('derivaciones')
-    .select(`
-      *,
-      paciente:pacientes(id, nombre, apellido, dni),
-      origen:profesionales!profesional_origen_id(id, nombre, apellido, especialidad),
-      destino:profesionales!profesional_destino_id(id, nombre, apellido, especialidad)
-    `)
-    .or(`profesional_origen_id.eq.${profId},profesional_destino_id.eq.${profId}`)
-    .order('created_at', { ascending: false });
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const data = await derivacionService.listar(getAuthenticatedClient(req), req.profesional.id);
+    res.json(data);
+  } catch (err) {
+    manejarError(res, err);
+  }
 });
 
 // GET /derivaciones/pendientes - Derivaciones recibidas pendientes
 router.get('/pendientes',
   requireAuth,
   async (req, res) => {
-    const db = getAuthenticatedClient(req);
-
-    const { data, error } = await db
-      .from('derivaciones')
-      .select(`
-        *,
-        paciente:pacientes(id, nombre, apellido, dni, fecha_nacimiento),
-        origen:profesionales!profesional_origen_id(id, nombre, apellido, especialidad)
-      `)
-      .eq('profesional_destino_id', req.profesional.id)
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: false });
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    try {
+      const data = await derivacionService.listarPendientes(getAuthenticatedClient(req), req.profesional.id);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 

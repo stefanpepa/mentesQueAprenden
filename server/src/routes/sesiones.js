@@ -1,43 +1,25 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
-const { requireAuth } = require('../middleware/auth');
-const { registrarAcceso } = require('../middleware/auditLog');
-const { getAuthenticatedClient } = require('../middleware/auth');
-const { supabaseAdmin } = require('../config/supabase');
+const { requireAuth, getAuthenticatedClient } = require('../middleware/auth');
+const sesionService = require('../services/SesionService');
 
 const router = express.Router();
+
+function manejarError(res, err, fallback = { status: 500, message: 'Error interno' }) {
+  const status = err.status || fallback.status;
+  res.status(status).json({ error: err.status ? err.message : fallback.message });
+}
 
 // GET /sesiones/:id
 router.get('/:id',
   requireAuth,
   async (req, res) => {
-    const db = getAuthenticatedClient(req);
-
-    const { data, error } = await db
-      .from('sesiones')
-      .select(`
-        *,
-        paciente:pacientes(id, nombre, apellido, dni, fecha_nacimiento),
-        profesional:profesionales!profesional_id(id, nombre, apellido, especialidad)
-      `)
-      .eq('id', req.params.id)
-      .single();
-
-    if (error) return res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
-
-    // Log acceso
-    if (data?.paciente_id) {
-      supabaseAdmin.from('logs_acceso').insert({
-        profesional_id: req.profesional.id,
-        paciente_id: data.paciente_id,
-        accion: 'ver',
-        recurso: 'sesion',
-        ip_address: req.ip,
-        user_agent: req.get('User-Agent')
-      });
+    try {
+      const data = await sesionService.obtener(getAuthenticatedClient(req), req.params.id, req.profesional.id, req);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    res.json(data);
   }
 );
 
@@ -57,19 +39,12 @@ router.post('/',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    const db = getAuthenticatedClient(req);
-    const { data, error } = await db
-      .from('sesiones')
-      .insert({
-        ...req.body,
-        profesional_id: req.profesional.id,
-        created_by: req.profesional.id
-      })
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data);
+    try {
+      const data = await sesionService.crear(getAuthenticatedClient(req), req.profesional.id, req.body);
+      res.status(201).json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 
@@ -89,22 +64,12 @@ router.patch('/:id',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    // Allowlist explícita: solo campos que el profesional puede editar post-creación
-    const CAMPOS_EDITABLES = ['notas_libres', 'notas_estructuradas', 'resumen_ia', 'monto', 'pagado', 'fecha_pago', 'metodo_pago'];
-    const updateData = Object.fromEntries(
-      Object.entries(req.body).filter(([k]) => CAMPOS_EDITABLES.includes(k))
-    );
-
-    const db = getAuthenticatedClient(req);
-    const { data, error } = await db
-      .from('sesiones')
-      .update(updateData)
-      .eq('id', req.params.id)
-      .select()
-      .single();
-
-    if (error) return res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
-    res.json(data);
+    try {
+      const data = await sesionService.actualizar(getAuthenticatedClient(req), req.params.id, req.body);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 
@@ -112,19 +77,12 @@ router.patch('/:id',
 router.get('/:id/versiones',
   requireAuth,
   async (req, res) => {
-    const db = getAuthenticatedClient(req);
-
-    const { data, error } = await db
-      .from('versiones_notas')
-      .select(`
-        *,
-        modificado_por:profesionales(id, nombre, apellido)
-      `)
-      .eq('sesion_id', req.params.id)
-      .order('modificado_at', { ascending: false });
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    try {
+      const data = await sesionService.listarVersiones(getAuthenticatedClient(req), req.params.id);
+      res.json(data);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 

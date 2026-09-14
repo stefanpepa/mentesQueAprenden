@@ -1,9 +1,14 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { supabase, supabaseAdmin } = require('../config/supabase');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const authService = require('../services/AuthService');
 
 const router = express.Router();
+
+function manejarError(res, err, fallback = { status: 500, message: 'Error interno' }) {
+  const status = err.status || fallback.status;
+  res.status(status).json({ error: err.status ? err.message : fallback.message });
+}
 
 // POST /auth/register - Solo admin puede registrar profesionales
 router.post('/register',
@@ -21,47 +26,14 @@ router.post('/register',
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(422).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    try {
+      const resultado = await authService.registrar(req.body);
+      res.status(201).json(resultado);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const { email, password, nombre, apellido, especialidad, rol, matricula, porcentaje_honorarios, telefono } = req.body;
-
-    // Crear usuario en Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    // Crear registro en tabla profesionales
-    const { data: profesional, error: profError } = await supabaseAdmin
-      .from('profesionales')
-      .insert({
-        id: authData.user.id,
-        email,
-        nombre,
-        apellido,
-        especialidad,
-        rol: rol || 'profesional',
-        matricula,
-        telefono,
-        porcentaje_honorarios: porcentaje_honorarios || 70.00
-      })
-      .select()
-      .single();
-
-    if (profError) {
-      // Rollback: eliminar usuario de auth si falla el insert
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return res.status(500).json({ error: 'Error al crear el profesional' });
-    }
-
-    res.status(201).json({ profesional });
   }
 );
 
@@ -78,61 +50,14 @@ router.post('/signup',
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(422).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    try {
+      const resultado = await authService.signup(req.body);
+      res.status(201).json(resultado);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const { email, password, nombre, apellido, especialidad, matricula, telefono } = req.body;
-
-    // Crear usuario en Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    // Crear registro en tabla profesionales — siempre rol 'profesional', nunca admin desde acá
-    const { data: profesional, error: profError } = await supabaseAdmin
-      .from('profesionales')
-      .insert({
-        id: authData.user.id,
-        email,
-        nombre,
-        apellido,
-        especialidad,
-        rol: 'profesional',
-        matricula,
-        telefono,
-        porcentaje_honorarios: 70.00
-      })
-      .select()
-      .single();
-
-    if (profError) {
-      // Rollback: eliminar usuario de auth si falla el insert
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      if (profError.code === '23505') return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
-      return res.status(500).json({ error: 'Error al crear la cuenta' });
-    }
-
-    // Login automático tras el registro
-    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
-    if (sessionError) {
-      return res.status(201).json({ profesional, session: null });
-    }
-
-    res.status(201).json({
-      profesional,
-      session: {
-        access_token: sessionData.session.access_token,
-        refresh_token: sessionData.session.refresh_token,
-        expires_at: sessionData.session.expires_at
-      }
-    });
   }
 );
 
@@ -144,41 +69,20 @@ router.post('/login',
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(422).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    try {
+      const resultado = await authService.login(req.body);
+      res.json(resultado);
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const { email, password } = req.body;
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
-    }
-
-    // Traer datos del profesional
-    const { data: profesional } = await supabaseAdmin
-      .from('profesionales')
-      .select('id, nombre, apellido, email, rol, especialidad, matricula, activo')
-      .eq('id', data.user.id)
-      .single();
-
-    res.json({
-      session: {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        expires_at: data.session.expires_at
-      },
-      profesional
-    });
   }
 );
 
 // POST /auth/logout
 router.post('/logout', requireAuth, async (req, res) => {
-  // Revocar el JWT del servidor usando el token del usuario, no la sesión anon del cliente
-  if (req.token) {
-    await supabaseAdmin.auth.admin.signOut(req.token);
-  }
+  await authService.logout(req.token);
   res.json({ message: 'Sesión cerrada' });
 });
 
@@ -187,14 +91,9 @@ router.post('/forgot-password',
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(422).json({ errors: errors.array() });
-    }
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
-    await supabase.auth.resetPasswordForEmail(req.body.email, {
-      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`
-    });
-
+    await authService.forgotPassword(req.body.email);
     // Respuesta genérica siempre, para no revelar si el email existe
     res.json({ message: 'Si el email existe, vas a recibir un link para restablecer tu contraseña.' });
   }
@@ -204,15 +103,12 @@ router.post('/forgot-password',
 router.post('/refresh',
   [body('refresh_token').notEmpty()],
   async (req, res) => {
-    const { refresh_token } = req.body;
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
-    if (error) return res.status(401).json({ error: 'Token inválido' });
-
-    res.json({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      expires_at: data.session.expires_at
-    });
+    try {
+      const resultado = await authService.refresh(req.body.refresh_token);
+      res.json(resultado);
+    } catch (err) {
+      manejarError(res, err);
+    }
   }
 );
 
@@ -227,17 +123,14 @@ router.patch('/change-password',
   [body('password').isLength({ min: 8 })],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(422).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    try {
+      await authService.changePassword(req.user.id, req.body.password);
+      res.json({ message: 'Contraseña actualizada' });
+    } catch (err) {
+      manejarError(res, err);
     }
-
-    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
-      req.user.id,
-      { password: req.body.password }
-    );
-
-    if (error) return res.status(400).json({ error: error.message });
-    res.json({ message: 'Contraseña actualizada' });
   }
 );
 

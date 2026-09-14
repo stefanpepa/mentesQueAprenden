@@ -5,7 +5,7 @@ import { format, differenceInYears } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Phone, Mail, FileText, Calendar,
+  ArrowLeft, Eye, Phone, Mail, FileText, Calendar,
   ArrowLeftRight, Paperclip, ChevronRight, Plus, Sparkles, Loader, Trash2, ClipboardList
 } from 'lucide-react';
 import Modal from '../components/ui/Modal';
@@ -45,6 +45,18 @@ export default function PacienteDetallePage() {
   const [modalPDF, setModalPDF] = useState(null); // { arch, analisis, pregunta }
   const [preguntaPDF, setPreguntaPDF] = useState('');
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
+  const [preview, setPreview] = useState(null); // { arch, url } | { arch, cargando: true } | null
+
+  const abrirPreview = async (arch) => {
+    setPreview({ arch, cargando: true });
+    try {
+      const res = await api.get(`/archivos/${arch.id}/download-url`);
+      setPreview({ arch, url: res.data.url });
+    } catch {
+      toast.error('No se pudo cargar la vista previa');
+      setPreview(null);
+    }
+  };
 
   const analizarPDFMutation = useMutation({
     mutationFn: ({ archivo_id, pregunta }) => api.post('/ia/analizar-pdf', { archivo_id, pregunta }).then(r => r.data),
@@ -444,12 +456,23 @@ export default function PacienteDetallePage() {
               <Paperclip size={40} className="mx-auto mb-2" />
               <p>Sin archivos adjuntos</p>
             </div>
-          ) : archivos?.map(arch => (
+          ) : archivos?.map(arch => {
+            const previsualizable = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(arch.mime_type);
+            return (
             <div key={arch.id} className="bg-white rounded-xl p-4 border border-gray-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Paperclip size={18} className="text-gray-500" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => previsualizable && abrirPreview(arch)}
+                  disabled={!previsualizable}
+                  title={previsualizable ? 'Vista previa' : undefined}
+                  className={`group relative w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 ${previsualizable ? 'cursor-pointer hover:bg-primary-50' : 'cursor-default'}`}
+                >
+                  <Paperclip size={18} className={`text-gray-500 transition-opacity ${previsualizable ? 'group-hover:opacity-0' : ''}`} />
+                  {previsualizable && (
+                    <Eye size={18} className="text-primary-600 absolute opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </button>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate">{arch.nombre_original}</p>
                   <p className="text-xs text-gray-500">
@@ -457,7 +480,7 @@ export default function PacienteDetallePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(arch.mime_type) && (
+                  {previsualizable && (
                     <button
                       onClick={() => setModalPDF({ arch, analisis: null })}
                       className="flex items-center gap-1 text-primary-500 hover:text-primary-700 text-xs font-medium px-2 py-1 border border-primary-100 rounded-lg hover:bg-primary-50"
@@ -480,7 +503,8 @@ export default function PacienteDetallePage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           </div>
         </div>
       )}
@@ -539,6 +563,25 @@ export default function PacienteDetallePage() {
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Modal: Vista previa de archivo */}
+      <Modal open={!!preview} onClose={() => setPreview(null)} title={preview?.arch?.nombre_original || 'Vista previa'} size="xl">
+        {preview?.cargando && (
+          <div className="flex items-center justify-center py-20 text-gray-400">
+            <Loader size={24} className="animate-spin" />
+          </div>
+        )}
+        {preview?.url && preview.arch.mime_type === 'application/pdf' && (
+          <iframe
+            src={`${preview.url}#toolbar=0&navpanes=0`}
+            title={preview.arch.nombre_original}
+            className="w-full h-[70vh] rounded-xl border border-gray-200"
+          />
+        )}
+        {preview?.url && preview.arch.mime_type !== 'application/pdf' && (
+          <img src={preview.url} alt={preview.arch.nombre_original} className="w-full max-h-[70vh] object-contain rounded-xl" />
         )}
       </Modal>
     </div>

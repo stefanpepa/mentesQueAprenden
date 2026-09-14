@@ -71,7 +71,7 @@ INSTRUCCIONES DE REDACCIÓN:
 
   const res = await openrouter.chat.completions.create({
     model: MODELO,
-    max_tokens: 2500,
+    max_tokens: 3500,
     messages: [{ role: 'user', content: prompt }]
   });
 

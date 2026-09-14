@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { ArrowLeftRight, CheckCircle, XCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, CheckCircle, XCircle, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -18,6 +18,7 @@ const ESTADO_COLOR = {
 export default function DerivacionesPage() {
   const { profesional } = useAuthStore();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('pendientes');
   const [modalResponder, setModalResponder] = useState(null);
@@ -38,12 +39,12 @@ export default function DerivacionesPage() {
     if (pacienteIdParam) setModalNueva(true);
   }, [pacienteIdParam]);
 
-  const { data: pendientes } = useQuery({
+  const { data: pendientes, isLoading: cargandoPendientes } = useQuery({
     queryKey: ['derivaciones-pendientes'],
     queryFn: () => api.get('/derivaciones/pendientes').then(r => r.data)
   });
 
-  const { data: todas } = useQuery({
+  const { data: todas, isLoading: cargandoTodas } = useQuery({
     queryKey: ['derivaciones-todas'],
     queryFn: () => api.get('/derivaciones').then(r => r.data),
     enabled: tab === 'todas'
@@ -64,12 +65,24 @@ export default function DerivacionesPage() {
       api.patch(`/derivaciones/${id}/responder`, { estado, observaciones }),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['derivaciones-pendientes'] });
+      queryClient.invalidateQueries({ queryKey: ['derivaciones-todas'] });
       queryClient.invalidateQueries({ queryKey: ['turnos-hoy'] });
+      queryClient.invalidateQueries({ queryKey: ['pacientes'] });
       setModalResponder(null);
       setObservaciones('');
       toast.success(vars.estado === 'aceptada' ? 'Derivación aceptada' : 'Derivación rechazada');
     },
     onError: () => toast.error('Error al responder la derivación')
+  });
+
+  const completarMutation = useMutation({
+    mutationFn: (id) => api.patch(`/derivaciones/${id}/completar`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['derivaciones-todas'] });
+      queryClient.invalidateQueries({ queryKey: ['pacientes'] });
+      toast.success('Derivación completada — el acceso al paciente se cerró');
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al completar la derivación')
   });
 
   const crearMutation = useMutation({
@@ -101,8 +114,13 @@ export default function DerivacionesPage() {
 
   return (
     <div className="p-4 lg:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Derivaciones</h1>
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/')} className="p-2 rounded-xl hover:bg-gray-100">
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">Derivaciones</h1>
+        </div>
         <button
           onClick={() => setModalNueva(true)}
           className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium"
@@ -127,7 +145,14 @@ export default function DerivacionesPage() {
       {/* Lista pendientes */}
       {tab === 'pendientes' && (
         <div className="space-y-3">
-          {!pendientes?.length ? (
+          {cargandoPendientes ? (
+            [...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl p-4 animate-pulse">
+                <div className="h-5 bg-gray-200 rounded w-1/3 mb-2" />
+                <div className="h-4 bg-gray-100 rounded w-1/2" />
+              </div>
+            ))
+          ) : !pendientes?.length ? (
             <div className="text-center py-16 text-gray-400">
               <ArrowLeftRight size={40} className="mx-auto mb-3 text-gray-200" />
               <p>No tenés derivaciones pendientes</p>
@@ -170,7 +195,14 @@ export default function DerivacionesPage() {
       {/* Lista todas */}
       {tab === 'todas' && (
         <div className="space-y-3">
-          {!todas?.length ? (
+          {cargandoTodas ? (
+            [...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl p-4 animate-pulse">
+                <div className="h-5 bg-gray-200 rounded w-1/3 mb-2" />
+                <div className="h-4 bg-gray-100 rounded w-1/2" />
+              </div>
+            ))
+          ) : !todas?.length ? (
             <div className="text-center py-16 text-gray-400">
               <ArrowLeftRight size={40} className="mx-auto mb-3 text-gray-200" />
               <p>Sin derivaciones registradas</p>
@@ -187,9 +219,20 @@ export default function DerivacionesPage() {
                   </p>
                   <p className="text-sm text-gray-700 mt-1 line-clamp-2">{der.motivo}</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ESTADO_COLOR[der.estado]}`}>
-                  {der.estado}
-                </span>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COLOR[der.estado]}`}>
+                    {der.estado}
+                  </span>
+                  {der.estado === 'aceptada' && der.activa && (
+                    <button
+                      onClick={() => completarMutation.mutate(der.id)}
+                      disabled={completarMutation.isPending}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-50"
+                    >
+                      Marcar completada
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

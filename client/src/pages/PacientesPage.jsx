@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Plus, ChevronRight, User } from 'lucide-react';
+import { Search, Plus, ChevronRight, User, ArrowLeftRight } from 'lucide-react';
 import api from '../services/api';
-import { format, differenceInYears } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { differenceInYears } from 'date-fns';
+import { useDebounce } from '../hooks/useDebounce';
 
 const ESTADO_BADGE = {
   activo: 'bg-green-100 text-green-700',
@@ -19,15 +19,6 @@ const ESTADO_LABEL = {
   alta: 'Alta',
   inactivo: 'Inactivo'
 };
-
-function useDebounce(value, delay = 400) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 export default function PacientesPage() {
   const [busqueda, setBusqueda] = useState('');
@@ -119,6 +110,9 @@ export default function PacientesPage() {
                     <p className="font-semibold text-gray-900">
                       {paciente.apellido}, {paciente.nombre}
                     </p>
+                    {paciente.derivado && (
+                      <ArrowLeftRight size={14} className="text-primary-500 flex-shrink-0" title="Paciente derivado" />
+                    )}
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ESTADO_BADGE[paciente.estado]}`}>
                       {ESTADO_LABEL[paciente.estado]}
                     </span>

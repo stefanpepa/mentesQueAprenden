@@ -100,10 +100,12 @@ void main() {
 }
 `;
 
+const DEFAULT_OFFSET = [0.0, 0.0];
+
 export default function Balatro({
   spinRotation = -2.0,
   spinSpeed = 7.0,
-  offset = [0.0, 0.0],
+  offset = DEFAULT_OFFSET,
   color1 = '#9b5de5',
   color2 = '#c5a3f0',
   color3 = '#f6f0fb',

@@ -132,7 +132,6 @@ export default function LoginPage() {
             <Brain className="text-white" size={30} strokeWidth={2} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Mentes que Aprenden</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestión Clínica Interdisciplinaria</p>
         </div>
 
         <AnimatePresence mode="wait">

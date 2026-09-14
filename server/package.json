@@ -4,9 +4,10 @@
   "description": "Backend - Sistema de Gestión Clínica Interdisciplinaria",
   "main": "src/index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
-    "migrate": "node src/utils/runMigrations.js"
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node src/utils/runMigrations.js",
+    "test": "NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -27,7 +28,9 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^30.5.1",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
   },
   "engines": {
     "node": ">=18.0.0"

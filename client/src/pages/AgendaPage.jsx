@@ -7,7 +7,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import esLocale from '@fullcalendar/core/locales/es';
 import { format } from 'date-fns';
-import { Plus, X, Send } from 'lucide-react';
+import { Plus, DoorOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -20,6 +20,8 @@ const COLORES_ESTADO = {
   ausente: '#f59e0b',
   realizado: '#6b7280'
 };
+
+const CONSULTORIOS = [1, 2, 3];
 
 const TIPO_OPTIONS = [
   { value: 'tratamiento', label: 'Tratamiento' },
@@ -39,9 +41,9 @@ export default function AgendaPage() {
   const [filtroProf, setFiltroProf] = useState(profesional?.id || '');
   const [nuevaFecha, setNuevaFecha] = useState('');
   const [nuevaHora, setNuevaHora] = useState('09:00');
-  const [formData, setFormData] = useState({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50, profesional_id: '' });
+  const [formData, setFormData] = useState({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50, profesional_id: '', consultorio: 1 });
 
-  const { data: turnos } = useQuery({
+  const { data: turnos, isLoading: cargandoTurnos } = useQuery({
     queryKey: ['turnos-agenda', rango, filtroProf],
     queryFn: () => {
       if (!rango.inicio) return [];
@@ -72,10 +74,10 @@ export default function AgendaPage() {
       queryClient.invalidateQueries({ queryKey: ['turnos-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['turnos-hoy'] });
       setModalNuevo(false);
-      setFormData({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50 });
+      setFormData({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50, profesional_id: '', consultorio: 1 });
       toast.success('Turno creado');
     },
-    onError: () => toast.error('Error al crear el turno')
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al crear el turno')
   });
 
   const actualizarMutation = useMutation({
@@ -88,24 +90,25 @@ export default function AgendaPage() {
     onError: () => toast.error('Error al actualizar el turno')
   });
 
-  const recordatorioMutation = useMutation({
-    mutationFn: (id) => api.post(`/turnos/${id}/recordatorio`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turnos-agenda'] });
-      toast.success('Recordatorio enviado');
-    },
-    onError: () => toast.error('Error al enviar el recordatorio')
-  });
-
   const eventos = (turnos || []).map(t => ({
     id: t.id,
-    title: t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : '(Sin paciente)',
+    title: t.ocupado
+      ? `Consultorio ${t.consultorio} ocupado`
+      : t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : '(Sin paciente)',
     start: t.fecha_inicio,
     end: t.fecha_fin,
-    backgroundColor: COLORES_ESTADO[t.estado] || '#6366f1',
-    borderColor: COLORES_ESTADO[t.estado] || '#6366f1',
+    backgroundColor: t.ocupado ? '#9ca3af' : (COLORES_ESTADO[t.estado] || '#6366f1'),
+    borderColor: t.ocupado ? '#9ca3af' : (COLORES_ESTADO[t.estado] || '#6366f1'),
     extendedProps: t
   }));
+
+  // Consultorios ocupados AHORA MISMO, para el semáforo de disponibilidad.
+  const ahora = Date.now();
+  const consultoriosOcupadosAhora = new Set(
+    (turnos || [])
+      .filter(t => t.estado !== 'cancelado' && new Date(t.fecha_inicio).getTime() <= ahora && new Date(t.fecha_fin).getTime() > ahora)
+      .map(t => t.consultorio)
+  );
 
   const handleDateSelect = (info) => {
     setNuevaFecha(format(info.start, 'yyyy-MM-dd'));
@@ -128,7 +131,8 @@ export default function AgendaPage() {
       profesional_id: formData.profesional_id || filtroProf || profesional.id,
       paciente_id: formData.paciente_id || undefined,
       tipo: formData.tipo,
-      notas: formData.notas
+      notas: formData.notas,
+      consultorio: Number(formData.consultorio)
     });
   };
 
@@ -163,6 +167,27 @@ export default function AgendaPage() {
         </div>
       </div>
 
+      {/* Semáforo de consultorios (disponibilidad ahora mismo) */}
+      <div className="flex flex-wrap items-center gap-3 mb-3 bg-white border border-gray-100 rounded-xl px-4 py-3">
+        <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+          <DoorOpen size={14} /> Consultorios ahora:
+        </span>
+        {CONSULTORIOS.map(n => {
+          const ocupado = consultoriosOcupadosAhora.has(n);
+          return (
+            <span
+              key={n}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                ocupado ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${ocupado ? 'bg-red-500' : 'bg-green-500'}`} />
+              Consultorio {n} — {ocupado ? 'ocupado' : 'libre'}
+            </span>
+          );
+        })}
+      </div>
+
       {/* Leyenda */}
       <div className="flex flex-wrap gap-3 mb-4">
         {Object.entries(COLORES_ESTADO).map(([estado, color]) => (
@@ -171,9 +196,19 @@ export default function AgendaPage() {
             {estado.charAt(0).toUpperCase() + estado.slice(1)}
           </div>
         ))}
+        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#9ca3af' }} />
+          Ocupado (otro profesional)
+        </div>
       </div>
 
       {/* Calendario */}
+      {cargandoTurnos ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 animate-pulse">
+          <div className="h-8 bg-gray-100 rounded w-1/3 mb-4" />
+          <div className="h-96 bg-gray-50 rounded" />
+        </div>
+      ) : (
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <FullCalendar
           ref={calendarRef}
@@ -202,6 +237,7 @@ export default function AgendaPage() {
           eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
         />
       </div>
+      )}
 
       {/* Modal: Nuevo turno */}
       <Modal open={modalNuevo} onClose={() => setModalNuevo(false)} title="Nuevo turno">
@@ -229,15 +265,28 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">Duración (minutos)</label>
-            <input
-              type="number"
-              value={formData.duracion}
-              onChange={(e) => setFormData(p => ({ ...p, duracion: e.target.value }))}
-              min={15} max={480} step={5}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Duración (minutos)</label>
+              <input
+                type="number"
+                value={formData.duracion}
+                onChange={(e) => setFormData(p => ({ ...p, duracion: e.target.value }))}
+                min={15} max={480} step={5}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Consultorio *</label>
+              <select
+                value={formData.consultorio}
+                onChange={(e) => setFormData(p => ({ ...p, consultorio: e.target.value }))}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                {CONSULTORIOS.map(n => <option key={n} value={n}>Consultorio {n}</option>)}
+              </select>
+            </div>
           </div>
 
           {isAdmin() && (
@@ -310,55 +359,56 @@ export default function AgendaPage() {
         {modalDetalle && (
           <div className="space-y-4">
             <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-              <p><span className="text-gray-500">Paciente:</span> <span className="font-medium">{modalDetalle.paciente ? `${modalDetalle.paciente.apellido}, ${modalDetalle.paciente.nombre}` : 'Sin paciente'}</span></p>
-              <p><span className="text-gray-500">Fecha:</span> <span className="font-medium">{format(new Date(modalDetalle.fecha_inicio), "d/MM/yyyy 'a las' HH:mm")}</span></p>
-              <p><span className="text-gray-500">Profesional:</span> <span className="font-medium">{modalDetalle.profesional?.apellido}</span></p>
-              <p><span className="text-gray-500">Tipo:</span> <span className="font-medium">{TIPO_OPTIONS.find(t => t.value === modalDetalle.tipo)?.label}</span></p>
-              {modalDetalle.notas && <p><span className="text-gray-500">Notas:</span> {modalDetalle.notas}</p>}
-            </div>
-
-            {/* Cambiar estado */}
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">Estado</label>
-              <div className="flex flex-wrap gap-2">
-                {['programado', 'confirmado', 'cancelado', 'ausente', 'realizado'].map(estado => (
-                  <button
-                    key={estado}
-                    onClick={() => actualizarMutation.mutate({ id: modalDetalle.id, estado })}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
-                      modalDetalle.estado === estado
-                        ? 'text-white border-transparent'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                    style={modalDetalle.estado === estado ? { backgroundColor: COLORES_ESTADO[estado] } : {}}
-                  >
-                    {estado.charAt(0).toUpperCase() + estado.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Acciones */}
-            <div className="flex gap-2 pt-2">
-              {modalDetalle.paciente?.telefono && (
-                <button
-                  onClick={() => recordatorioMutation.mutate(modalDetalle.id)}
-                  disabled={recordatorioMutation.isPending || modalDetalle.recordatorio_enviado}
-                  className="flex items-center gap-2 flex-1 justify-center py-2.5 border border-primary-200 text-primary-600 hover:bg-primary-50 rounded-xl text-sm font-medium disabled:opacity-50"
-                >
-                  <Send size={14} />
-                  {modalDetalle.recordatorio_enviado ? 'Recordatorio enviado' : 'Enviar recordatorio'}
-                </button>
-              )}
-              {modalDetalle.paciente_id && (
-                <a
-                  href={`/sesiones/nueva?paciente_id=${modalDetalle.paciente_id}&turno_id=${modalDetalle.id}`}
-                  className="flex-1 text-center py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium"
-                >
-                  Registrar sesión
-                </a>
+              {modalDetalle.ocupado ? (
+                <p><span className="text-gray-500">Consultorio {modalDetalle.consultorio}:</span> <span className="font-medium">Ocupado por otro profesional en este horario</span></p>
+              ) : (
+                <>
+                  <p><span className="text-gray-500">Paciente:</span> <span className="font-medium">{modalDetalle.paciente ? `${modalDetalle.paciente.apellido}, ${modalDetalle.paciente.nombre}` : 'Sin paciente'}</span></p>
+                  <p><span className="text-gray-500">Fecha:</span> <span className="font-medium">{format(new Date(modalDetalle.fecha_inicio), "d/MM/yyyy 'a las' HH:mm")}</span></p>
+                  <p><span className="text-gray-500">Profesional:</span> <span className="font-medium">{modalDetalle.profesional?.apellido}</span></p>
+                  <p><span className="text-gray-500">Consultorio:</span> <span className="font-medium">{modalDetalle.consultorio}</span></p>
+                  <p><span className="text-gray-500">Tipo:</span> <span className="font-medium">{TIPO_OPTIONS.find(t => t.value === modalDetalle.tipo)?.label}</span></p>
+                  {modalDetalle.notas && <p><span className="text-gray-500">Notas:</span> {modalDetalle.notas}</p>}
+                </>
               )}
             </div>
+
+            {!modalDetalle.ocupado && (
+              <>
+                {/* Cambiar estado */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Estado</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['programado', 'confirmado', 'cancelado', 'ausente', 'realizado'].map(estado => (
+                      <button
+                        key={estado}
+                        onClick={() => actualizarMutation.mutate({ id: modalDetalle.id, estado })}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                          modalDetalle.estado === estado
+                            ? 'text-white border-transparent'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                        style={modalDetalle.estado === estado ? { backgroundColor: COLORES_ESTADO[estado] } : {}}
+                      >
+                        {estado.charAt(0).toUpperCase() + estado.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Acciones */}
+                {modalDetalle.paciente_id && (
+                  <div className="flex gap-2 pt-2">
+                    <a
+                      href={`/sesiones/nueva?paciente_id=${modalDetalle.paciente_id}&turno_id=${modalDetalle.id}`}
+                      className="flex-1 text-center py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium"
+                    >
+                      Registrar sesión
+                    </a>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </Modal>

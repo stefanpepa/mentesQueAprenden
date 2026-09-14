@@ -8,17 +8,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Centro de Salud - Gestión Clínica',
-        short_name: 'Clínica',
+        name: 'Mentes que Aprenden - Gestión Clínica',
+        short_name: 'Mentes que Aprenden',
         description: 'Sistema de gestión clínica interdisciplinaria',
-        theme_color: '#4f46e5',
+        theme_color: '#7c5cbf',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         lang: 'es',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+          { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' }
         ]
       }
     })
