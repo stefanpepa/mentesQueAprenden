@@ -100,7 +100,7 @@ router.post('/chat',
       const resultado = await iaService.chat({ messages: req.body.messages, profesional: req.profesional });
       res.json(resultado);
     } catch (err) {
-      console.error('Chat IA error:', err.message, err.status, JSON.stringify(err.error));
+      console.error('Chat IA error:', err.message, err.upstreamDetail || '', err.status);
       res.status(502).json({ error: err.message || 'Error al conectar con la IA' });
     }
   }

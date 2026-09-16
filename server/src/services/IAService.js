@@ -7,6 +7,12 @@ const MODELO_CHAT = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 
 const TIPOS_SESION = ['evaluacion', 'tratamiento', 'seguimiento', 'devolucion', 'reunion_interdisciplinaria'];
 
+// Los modelos ":free" de OpenRouter corren en un pool de workers compartido
+// entre todos los usuarios de OpenRouter, así que se saturan de forma
+// transitoria y ajena a nuestro tráfico. Este patrón detecta esos casos para
+// reintentar en vez de mostrarle el error al profesional en el primer intento.
+const PATRON_SATURACION = /resourceexhausted|rate.?limit|too many requests|limit reached/i;
+
 const SYSTEM_PROMPT_BASE = `Sos el asistente de un centro de salud interdisciplinario argentino.
 
 Cuando el usuario pide una acción, respondé con un bloque JSON seguido de tu texto:
@@ -66,12 +72,43 @@ class IAService {
   }
 
   async completar(modelo, mensajes, maxTokens = 500) {
-    const res = await this.openrouter.chat.completions.create({
-      model: modelo,
-      max_tokens: maxTokens,
-      messages: mensajes
-    });
-    return res.choices[0].message.content.trim();
+    const res = await this.crearCompletion({ model: modelo, max_tokens: maxTokens, messages: mensajes });
+    return this.extraerContenido(res).trim();
+  }
+
+  // OpenRouter a veces responde HTTP 200 con un error embebido en vez de tirar
+  // una excepción (ej: el worker del modelo gratuito está saturado). El SDK de
+  // OpenAI no lo detecta como error porque el status HTTP es 2xx, así que su
+  // maxRetries no se activa acá: por eso reintentamos nosotros a mano cuando
+  // el error embebido es de saturación transitoria del pool gratuito.
+  async crearCompletion(params, intentos = 3) {
+    let ultimaResponse;
+    for (let i = 0; i < intentos; i++) {
+      ultimaResponse = await this.openrouter.chat.completions.create(params);
+      const detalle = ultimaResponse?.error?.message;
+      if (!detalle || !PATRON_SATURACION.test(detalle) || i === intentos - 1) return ultimaResponse;
+      await new Promise(r => setTimeout(r, 700 * (i + 1)));
+    }
+    return ultimaResponse;
+  }
+
+  // El texto de "detalle" es el error crudo del proveedor upstream (ej: "Upstream
+  // error from Nvidia: ResourceExhausted..."), un detalle de implementación (qué
+  // proveedor sirve el modelo gratuito por debajo de OpenRouter) que no debe
+  // filtrarse a la UI. Se guarda en err.upstreamDetail solo para logs de servidor.
+  extraerContenido(response) {
+    const contenido = response?.choices?.[0]?.message?.content;
+    if (contenido === undefined) {
+      const detalle = response?.error?.message || 'la IA no devolvió una respuesta válida';
+      const saturado = PATRON_SATURACION.test(detalle);
+      const err = new Error(saturado
+        ? 'El modelo de IA está saturado en este momento. Probá de nuevo en unos segundos.'
+        : 'Modelo de IA no disponible ahora mismo. Probá de nuevo en unos minutos.');
+      err.status = 502;
+      err.upstreamDetail = detalle;
+      throw err;
+    }
+    return contenido;
   }
 
   // El chatbot usa supabaseAdmin (bypasea RLS), así que hay que replicar acá
@@ -413,13 +450,13 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
 
     // Hasta 5 acciones encadenadas por mensaje
     for (let i = 0; i < 5; i++) {
-      const response = await this.openrouter.chat.completions.create({
+      const response = await this.crearCompletion({
         model: MODELO_CHAT,
         messages: historial,
         max_tokens: 500
       });
 
-      const rawText = response.choices[0].message.content.trim();
+      const rawText = this.extraerContenido(response).trim();
       const accion = this.parsearAccion(rawText);
 
       if (!accion) {
@@ -454,12 +491,12 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
     }
 
     if (!mensajeFinal) {
-      const resumenResp = await this.openrouter.chat.completions.create({
+      const resumenResp = await this.crearCompletion({
         model: MODELO_CHAT,
         messages: [...historial, { role: 'user', content: 'Resumí en lenguaje natural todo lo que hiciste, sin JSON.' }],
         max_tokens: 400
       });
-      mensajeFinal = this.limpiarTexto(resumenResp.choices[0].message.content.trim());
+      mensajeFinal = this.limpiarTexto(this.extraerContenido(resumenResp).trim());
     }
 
     return { message: mensajeFinal, tool_results: toolResults };
