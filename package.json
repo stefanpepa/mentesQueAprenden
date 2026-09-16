@@ -9,5 +9,8 @@
     "install:all": "npm install --prefix server && npm install --prefix client",
     "build:client": "npm run build --prefix client"
   },
-  "workspaces": ["server", "client"]
+  "workspaces": ["server", "client"],
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
 }
