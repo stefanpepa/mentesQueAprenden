@@ -34,6 +34,23 @@ class SesionService {
     return data;
   }
 
+  // Sesiones registradas por el profesional, de la más reciente a la más vieja.
+  async listarDelProfesional(db, profesionalId, { paciente_id, hasta, limit = 20 } = {}) {
+    let q = db
+      .from('sesiones')
+      .select('id, fecha, tipo, duracion_minutos, pagado, paciente:pacientes(id, nombre, apellido)')
+      .eq('profesional_id', profesionalId)
+      .order('fecha', { ascending: false })
+      .limit(limit);
+
+    if (paciente_id) q = q.eq('paciente_id', paciente_id);
+    if (hasta) q = q.lte('fecha', hasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
   async crear(db, profesionalId, body) {
     const { data, error } = await db
       .from('sesiones')

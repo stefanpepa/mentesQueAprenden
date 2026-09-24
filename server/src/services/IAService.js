@@ -1,11 +1,31 @@
 const OpenAI = require('openai');
 const { supabaseAdmin } = require('../config/supabase');
 const { extraerTextoDocumento } = require('./geminiExtractor');
+const pacienteService = require('./PacienteService');
+const turnoService = require('./TurnoService');
+const sesionService = require('./SesionService');
 
 const MODELO_TEXTO = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 const MODELO_CHAT = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
 
 const TIPOS_SESION = ['evaluacion', 'tratamiento', 'seguimiento', 'devolucion', 'reunion_interdisciplinaria'];
+
+const ZONA_HORARIA = 'America/Argentina/Buenos_Aires';
+const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+// Fecha de hoy en Argentina como YYYY-MM-DD. toISOString() daría la fecha UTC,
+// que a partir de las 21 hs ya es "mañana".
+function hoyArgentina() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: ZONA_HORARIA });
+}
+
+// Los turnos se guardan en UTC; al modelo se los damos ya en hora local y
+// legibles, para que no tenga que convertir zonas horarias (se equivoca).
+function formatearFechaHora(iso) {
+  return new Date(iso).toLocaleString('es-AR', {
+    timeZone: ZONA_HORARIA, weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+}
 
 // Los modelos ":free" de OpenRouter corren en un pool de workers compartido
 // entre todos los usuarios de OpenRouter, así que se saturan de forma
@@ -22,14 +42,16 @@ Cuando el usuario pide una acción, respondé con un bloque JSON seguido de tu t
 \`\`\`
 
 Acciones disponibles:
-- buscar_pacientes: params: { busqueda: string }
+- listar_mis_pacientes: params: {} — Devuelve TODOS los pacientes del profesional (propios y derivados). Usala cuando pidan "mis pacientes", "todos los pacientes", "cuántos pacientes tengo", o cuando se refieran a un paciente sin decir el nombre ("mi único paciente", "mi paciente").
+- buscar_pacientes: params: { busqueda: string } — Solo cuando el usuario dice un nombre, apellido o DNI concreto.
 - ver_paciente: params: { paciente_id: string }
 - mostrar_formulario_paciente: params: { nombre?, apellido?, dni?, fecha_nacimiento?, telefono?, email?, motivo_consulta? } — Usar INMEDIATAMENTE cuando el usuario quiera crear/registrar/agendar un PACIENTE nuevo (persona que todavía no existe en el sistema), sin pedir datos primero. El usuario los completa en el formulario. Ejemplos que van acá: "agendame un paciente nuevo", "quiero cargar un paciente", "registrar un paciente".
 - mostrar_formulario_turno: params: { paciente_id?, paciente_nombre?, fecha_inicio?, tipo?, duracion_minutos? } — Usar INMEDIATAMENTE cuando el usuario quiera agendar un TURNO (una cita/sesión) para un paciente que YA EXISTE en el sistema. El usuario completa los datos en el formulario. Si no está claro si el paciente ya existe, usá buscar_pacientes primero; si no aparece, ofrecé mostrar_formulario_paciente en su lugar.
 - crear_paciente: NO usar directamente; solo se invoca desde el formulario.
-- ver_agenda: params: { fecha?: "YYYY-MM-DD" } (default: hoy)
+- ver_agenda: params: { fecha?: "YYYY-MM-DD", fecha_hasta?: "YYYY-MM-DD" } — Turnos del profesional. Sin fecha: hoy. Con fecha_hasta: el rango completo (ej: "esta semana"). Las horas ya vienen en hora argentina.
+- listar_mis_sesiones: params: { paciente_id?: string } — Sesiones del profesional separadas en "futuras" (turnos agendados) y "pasadas" (sesiones ya hechas; las que tienen registrada=false son turnos que pasaron sin que se cargue la sesión). Usala cuando pidan "mis sesiones", "sesiones pasadas", "próximas sesiones", "historial de sesiones". Con paciente_id, solo las de ese paciente. Mostrá siempre los dos grupos por separado.
 - crear_turno: NO usar directamente; solo se invoca desde el formulario.
-- registrar_sesion: params: { paciente_id, fecha: "YYYY-MM-DDTHH:MM:00", tipo, duracion_minutos?, notas_libres?, monto? }
+- registrar_sesion: NO usar para listar ni consultar sesiones; solo para CARGAR una sesión ya realizada. params: { paciente_id, fecha: "YYYY-MM-DDTHH:MM:00", tipo, duracion_minutos?, notas_libres?, monto? }
 - listar_profesionales: params: {}
 - eliminar_paciente: params: { paciente_id: string } — DA DE BAJA a un paciente (no borra su historial clínico, solo lo oculta de los listados). Es una acción DESTRUCTIVA e IRREVERSIBLE desde el chat: nunca la ejecutes directamente aunque el usuario diga el nombre. Primero usá buscar_pacientes para encontrar el paciente_id real (si no hay resultados, avisá que no existe, no inventes que preguntaste un ID). Después mostrale al usuario el nombre completo encontrado y preguntale explícitamente "¿Confirmás eliminar a [nombre]? Esta acción no se puede deshacer desde acá." Solo ejecutá eliminar_paciente en el mensaje siguiente si el usuario confirma claramente (sí, dale, confirmo, etc).
 
@@ -253,8 +275,26 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
   // Chatbot con function calling manual
   // ─────────────────────────────────────────────────────────────
 
-  async ejecutarTool(nombre, args, profesional) {
+  // `db` es el cliente autenticado como el profesional (respeta RLS). Las tools
+  // de lectura nuevas delegan en los mismos services que usan las rutas REST,
+  // así el chat ve exactamente lo que el profesional ve en la app.
+  async ejecutarTool(nombre, args, profesional, db) {
     switch (nombre) {
+      case 'listar_mis_pacientes': {
+        const { data, pagination } = await pacienteService.listar(db, { limit: 100 }, profesional.id);
+        return {
+          total: pagination.total,
+          pacientes: data.map(p => ({
+            id: p.id,
+            nombre: p.nombre,
+            apellido: p.apellido,
+            dni: p.dni,
+            estado: p.estado,
+            derivado: p.derivado
+          }))
+        };
+      }
+
       case 'buscar_pacientes': {
         const { data: derivados } = await supabaseAdmin
           .from('derivaciones')
@@ -319,16 +359,68 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
       }
 
       case 'ver_agenda': {
-        const fecha = args.fecha || new Date().toISOString().slice(0, 10);
-        const inicio = `${fecha}T00:00:00`;
-        const fin = `${fecha}T23:59:59`;
-        const { data } = await supabaseAdmin
-          .from('turnos')
-          .select('id, fecha_inicio, fecha_fin, estado, tipo, paciente:pacientes(id, nombre, apellido, telefono), profesional:profesionales!profesional_id(nombre, apellido)')
-          .gte('fecha_inicio', inicio)
-          .lte('fecha_inicio', fin)
-          .order('fecha_inicio');
-        return { fecha, turnos: data || [] };
+        const desde = args.fecha || hoyArgentina();
+        const hasta = args.fecha_hasta || desde;
+        if (!PATRON_FECHA.test(desde) || !PATRON_FECHA.test(hasta)) {
+          throw new Error('fecha inválida: usar formato YYYY-MM-DD');
+        }
+        // Solo la agenda propia: los turnos de otros profesionales no le sirven
+        // al usuario del chat (y el service igual los devolvería sin datos clínicos).
+        const turnos = await turnoService.listar(db, {
+          fecha_inicio: `${desde}T00:00:00-03:00`,
+          fecha_fin: `${hasta}T23:59:59-03:00`,
+          profesional_id: profesional.id
+        }, profesional.id);
+        return {
+          desde,
+          hasta,
+          total: turnos.length,
+          turnos: turnos.map(t => ({
+            id: t.id,
+            inicio: formatearFechaHora(t.fecha_inicio),
+            fin: formatearFechaHora(t.fecha_fin),
+            estado: t.estado,
+            tipo: t.tipo,
+            consultorio: t.consultorio,
+            paciente: t.paciente ? { id: t.paciente.id, nombre: `${t.paciente.nombre} ${t.paciente.apellido}` } : null
+          }))
+        };
+      }
+
+      case 'listar_mis_sesiones': {
+        const ahora = new Date().toISOString();
+        const filtroPaciente = args.paciente_id || undefined;
+
+        const [sesiones, turnosFuturos, turnosPasados] = await Promise.all([
+          sesionService.listarDelProfesional(db, profesional.id, { paciente_id: filtroPaciente, hasta: ahora }),
+          turnoService.listar(db, { fecha_inicio: ahora, profesional_id: profesional.id }, profesional.id),
+          turnoService.listar(db, { fecha_fin: ahora, profesional_id: profesional.id }, profesional.id)
+        ]);
+        const delPaciente = t => !filtroPaciente || t.paciente_id === filtroPaciente;
+        const nombrePaciente = p => (p ? `${p.nombre} ${p.apellido}` : null);
+
+        // Un turno pasado con sesión cargada ya aparece como sesión; solo
+        // agregamos los que quedaron sin registrar para que no se pierdan.
+        const pasadas = [
+          ...sesiones.map(s => ({
+            id: s.id, fecha: s.fecha, tipo: s.tipo, paciente: nombrePaciente(s.paciente),
+            registrada: true, pagado: s.pagado
+          })),
+          ...turnosPasados.filter(t => delPaciente(t) && !t.sesion).map(t => ({
+            id: t.id, fecha: t.fecha_inicio, tipo: t.tipo, paciente: nombrePaciente(t.paciente),
+            registrada: false, estado_turno: t.estado
+          }))
+        ]
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+          .slice(0, 20)
+          .map(s => ({ ...s, fecha: formatearFechaHora(s.fecha) }));
+
+        const futuras = turnosFuturos.filter(delPaciente).map(t => ({
+          id: t.id, fecha: formatearFechaHora(t.fecha_inicio), tipo: t.tipo,
+          paciente: nombrePaciente(t.paciente), estado_turno: t.estado, consultorio: t.consultorio
+        }));
+
+        return { futuras, pasadas };
       }
 
       case 'crear_turno': {
@@ -438,7 +530,7 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
     return `${SYSTEM_PROMPT_BASE}\n\nHoy es ${hoy}. Profesional activo: ${profNombre} ${profApellido} (${profEspecialidad}, ${profRol}).`;
   }
 
-  async chat({ messages, profesional }) {
+  async chat({ messages, profesional, db }) {
     const chatMessages = [
       { role: 'system', content: this.construirSystemPrompt(profesional) },
       ...messages
@@ -466,7 +558,7 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
 
       let toolResult;
       try {
-        const resultado = await this.ejecutarTool(accion.action, accion.params || {}, profesional);
+        const resultado = await this.ejecutarTool(accion.action, accion.params || {}, profesional, db);
         toolResult = { name: accion.action, result: resultado };
       } catch (err) {
         toolResult = { name: accion.action, result: { error: err.message } };

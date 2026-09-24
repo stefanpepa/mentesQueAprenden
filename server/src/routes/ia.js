@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, getAuthenticatedClient } = require('../middleware/auth');
 const iaService = require('../services/IAService');
 
 const router = express.Router();
@@ -97,7 +97,7 @@ router.post('/chat',
     if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 
     try {
-      const resultado = await iaService.chat({ messages: req.body.messages, profesional: req.profesional });
+      const resultado = await iaService.chat({ messages: req.body.messages, profesional: req.profesional, db: getAuthenticatedClient(req) });
       res.json(resultado);
     } catch (err) {
       console.error('Chat IA error:', err.message, err.upstreamDetail || '', err.status);
