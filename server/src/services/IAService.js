@@ -158,19 +158,30 @@ class IAService {
     ]);
 
     const edad = this.calcularEdad(paciente?.fecha_nacimiento);
-    const historial = anteriores?.length
-      ? anteriores.map(s => `- ${new Date(s.fecha).toLocaleDateString('es-AR')}: ${s.resumen_ia || s.notas_libres?.slice(0, 150) || 'sin notas'}`).join('\n')
-      : 'Primera sesión.';
+    const esPrimeraSesion = !anteriores?.length;
+    const historial = esPrimeraSesion
+      ? '(No hay sesiones anteriores registradas: esta es la primera sesión del paciente.)'
+      : anteriores.map(s => `- ${new Date(s.fecha).toLocaleDateString('es-AR')} (YA ocurrida): ${s.resumen_ia || s.notas_libres?.slice(0, 150) || 'sin notas'}`).join('\n');
 
     const prompt = `Sos un asistente especializado en ${especialidad} para profesionales de la salud en Argentina.
 
 Paciente: ${edad} años. Motivo: ${paciente?.motivo_consulta || 'no registrado'}.
-Sesiones anteriores:\n${historial}
 
-El profesional registró estas notas parciales de una sesión de tipo "${tipo_sesion}":
+=== HISTORIAL (sesiones PASADAS, ya terminadas — solo como contexto de fondo) ===
+${historial}
+
+=== SESIÓN DE HOY (tipo "${tipo_sesion}") — esto es lo que hay que redactar ===
+Notas parciales que el profesional escribió sobre la sesión de HOY:
 "${notas_parciales}"
 
-Completá y estructurá las notas en primera persona del profesional. Incluí: observaciones clínicas, intervenciones realizadas, respuesta del paciente, y aspectos a trabajar. Máximo 300 palabras, lenguaje clínico de ${especialidad} en Argentina. Solo las notas, sin títulos.`;
+Reglas, en orden de importancia:
+1. Todo lo que está arriba en "HISTORIAL" ya sucedió en el pasado. NUNCA lo presentes como si fuera parte de la sesión de hoy, ni reuses sus frases (por ejemplo "es la primera sesión", "vamos a empezar con...") para describir la sesión de hoy si en realidad describían una sesión anterior. Usalo solo como trasfondo (ej. "el paciente ya venía presentando..."), nunca como el contenido de la nota de hoy.
+2. La nota que tenés que redactar es EXCLUSIVAMENTE sobre "SESIÓN DE HOY", usando SOLO lo que dicen sus notas parciales (más el historial como trasfondo si aporta contexto real). NO inventes observaciones clínicas, intervenciones, reacciones del paciente ni datos que no estén explícitamente escritos en la sesión de hoy.
+3. Nunca redactes como si hubieras presenciado la sesión si las notas de hoy no lo describen.
+4. Si las notas parciales de hoy son un plan o intención (ej. "voy a preguntar por...", "la idea es explorar...") y no una descripción de algo que ya ocurrió, mantené esa misma naturaleza de plan — no la conviertas en un relato de hechos ya sucedidos.
+5. Si hay muy poco contenido real para trabajar, escribí una nota breve y honesta con lo poco que hay, sin rellenar con contenido inventado. Si directamente no hay nada aprovechable en las notas de hoy, respondé únicamente: "No hay información suficiente en las notas para generar una sugerencia. Registrá al menos algunas observaciones u datos de la sesión."
+
+Redactá en primera persona del profesional. Máximo 300 palabras, lenguaje clínico de ${especialidad} en Argentina. Solo las notas (o el mensaje de falta de información), sin títulos.`;
 
     return this.completar(MODELO_TEXTO, [{ role: 'user', content: prompt }]);
   }
@@ -185,7 +196,7 @@ Completá y estructurá las notas en primera persona del profesional. Incluí: o
     const edad = this.calcularEdad(sesion?.paciente?.fecha_nacimiento);
     const especialidad = sesion?.profesional?.especialidad || 'salud';
 
-    const prompt = `Resumí en máximo 3 oraciones esta sesión clínica de ${especialidad} con un paciente de ${edad} años. En tercera persona, capturando los puntos clínicos más relevantes. Solo el resumen.
+    const prompt = `Resumí en máximo 3 oraciones esta sesión clínica de ${especialidad} con un paciente de ${edad} años. En tercera persona, capturando los puntos clínicos más relevantes. Usá únicamente lo que dicen las notas de abajo, sin agregar observaciones, síntomas o datos que no estén escritos ahí. Si las notas son muy breves, el resumen puede ser igual de breve. Solo el resumen.
 
 Notas:\n${notas_libres}`;
 
@@ -370,7 +381,7 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
           fecha_inicio: `${desde}T00:00:00-03:00`,
           fecha_fin: `${hasta}T23:59:59-03:00`,
           profesional_id: profesional.id
-        }, profesional.id);
+        }, profesional.id, { incluirSesiones: true });
         return {
           desde,
           hasta,
@@ -539,6 +550,7 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
     const historial = [...chatMessages];
     const toolResults = [];
     let mensajeFinal = '';
+    let sinMensaje = false;
 
     // Hasta 5 acciones encadenadas por mensaje
     for (let i = 0; i < 5; i++) {
@@ -565,13 +577,12 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
       }
       toolResults.push(toolResult);
 
-      // Formularios interactivos: el usuario completa los datos en el front, terminar acá
-      if (accion.action === 'mostrar_formulario_paciente') {
-        mensajeFinal = this.limpiarTexto(rawText) || 'Completá los datos del paciente:';
-        break;
-      }
-      if (accion.action === 'mostrar_formulario_turno') {
-        mensajeFinal = this.limpiarTexto(rawText) || 'Completá los datos del turno:';
+      // Formularios interactivos: el formulario ya explica qué datos pide,
+      // así que no hace falta (ni conviene, por latencia) que el modelo
+      // también lo describa en texto — se descarta el texto y se corta acá.
+      if (accion.action === 'mostrar_formulario_paciente' || accion.action === 'mostrar_formulario_turno') {
+        mensajeFinal = '';
+        sinMensaje = true;
         break;
       }
 
@@ -582,7 +593,7 @@ Respondé en 4-6 oraciones, lenguaje clínico profesional.`;
       });
     }
 
-    if (!mensajeFinal) {
+    if (!mensajeFinal && !sinMensaje) {
       const resumenResp = await this.crearCompletion({
         model: MODELO_CHAT,
         messages: [...historial, { role: 'user', content: 'Resumí en lenguaje natural todo lo que hiciste, sin JSON.' }],

@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import IAAssistant from '../components/ui/IAAssistant';
 import FileUpload from '../components/ui/FileUpload';
+
+const CONSULTORIOS = [1, 2, 3];
 
 const TIPOS = [
   { value: 'tratamiento', label: 'Tratamiento' },
@@ -19,18 +22,26 @@ const TIPOS = [
 
 export default function NuevaSesionPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const pacienteIdParam = searchParams.get('paciente_id');
+  const turnoIdParam = searchParams.get('turno_id');
+  // Al venir de "Registrar sesión" en un turno, la sesión arranca con los
+  // datos de ese turno para que ambos coincidan desde el principio.
+  const fechaTurnoParam = searchParams.get('fecha');
   const { profesional } = useAuthStore();
   const [notasLibres, setNotasLibres] = useState('');
   const [sesionCreada, setSesionCreada] = useState(null);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+  // datetime-local trabaja en hora local: el valor por defecto tiene que
+  // estar en hora local (no UTC) y se convierte a UTC recién al enviar.
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
       paciente_id: pacienteIdParam || '',
-      tipo: 'tratamiento',
-      fecha: new Date().toISOString().slice(0, 16),
-      duracion_minutos: 50
+      tipo: searchParams.get('tipo') || 'tratamiento',
+      fecha: format(fechaTurnoParam ? new Date(fechaTurnoParam) : new Date(), "yyyy-MM-dd'T'HH:mm"),
+      duracion_minutos: Number(searchParams.get('duracion')) || 50,
+      consultorio: searchParams.get('consultorio') || '1'
     }
   });
 
@@ -42,6 +53,12 @@ export default function NuevaSesionPage() {
     queryFn: () => api.get('/pacientes', { params: { limit: 200 } }).then(r => r.data?.data || [])
   });
 
+  // El <select> se monta antes de que lleguen las opciones, así que el valor
+  // por defecto no queda seleccionado; se reaplica cuando ya están.
+  useEffect(() => {
+    if (pacienteIdParam && pacientes?.length) setValue('paciente_id', pacienteIdParam);
+  }, [pacientes, pacienteIdParam, setValue]);
+
   const { data: paciente } = useQuery({
     queryKey: ['paciente', pacienteId],
     queryFn: () => api.get(`/pacientes/${pacienteId}`).then(r => r.data),
@@ -51,6 +68,8 @@ export default function NuevaSesionPage() {
   const mutation = useMutation({
     mutationFn: (data) => api.post('/sesiones', data),
     onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['paciente-sesiones', res.data.paciente_id] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).includes('turno') });
       setSesionCreada(res.data);
     },
     onError: (err) => toast.error(err?.response?.data?.error || 'Error al guardar la sesión')
@@ -61,11 +80,15 @@ export default function NuevaSesionPage() {
     onSuccess: () => navigate(`/pacientes/${pacienteId}`)
   });
 
-  const onSubmit = (data) => {
+  const onSubmit = ({ monto, consultorio, ...data }) => {
     mutation.mutate({
       ...data,
+      consultorio: consultorio ? Number(consultorio) : null,
+      fecha: new Date(data.fecha).toISOString(),
       notas_libres: notasLibres,
-      duracion_minutos: Number(data.duracion_minutos)
+      duracion_minutos: Number(data.duracion_minutos),
+      monto: monto === '' || monto == null ? undefined : Number(monto),
+      turno_id: turnoIdParam || undefined
     });
   };
 
@@ -151,6 +174,13 @@ export default function NuevaSesionPage() {
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Duración (min)</label>
               <input type="number" {...register('duracion_minutos')} min={15} max={480} step={5} className={inputClass} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Consultorio</label>
+              <select {...register('consultorio')} className={inputClass}>
+                {CONSULTORIOS.map(n => <option key={n} value={n}>Consultorio {n}</option>)}
+                <option value="">Sin consultorio</option>
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Monto ($)</label>

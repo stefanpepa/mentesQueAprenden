@@ -121,7 +121,7 @@ export function PacienteFormCard({ prefill = {} }) {
 export function TurnoFormCard({ prefill = {} }) {
   const { profesional } = useAuthStore();
   const queryClient = useQueryClient();
-  const hoy = new Date().toISOString().slice(0, 16);
+  const hoy = format(new Date(), "yyyy-MM-dd'T'HH:mm");
   const [form, setForm] = useState({
     paciente_id: prefill.paciente_id || '',
     paciente_busqueda: prefill.paciente_nombre || '',

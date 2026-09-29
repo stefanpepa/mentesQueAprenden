@@ -31,10 +31,13 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting global
+// Rate limiting global. Se cuenta por IP: en un consultorio todos los
+// profesionales salen por la misma, y la app sola ya hace varias consultas
+// por minuto (p. ej. derivaciones pendientes cada 20 s), así que un límite
+// bajo termina bloqueando guardados normales con 429.
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_MAX) || 100,
+  max: Number(process.env.RATE_LIMIT_MAX) || 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' }
@@ -50,7 +53,8 @@ const authLimiter = rateLimit({
 });
 
 // Parseo
-app.use(express.json({ limit: '10kb' }));
+// Notas clínicas largas (o sugeridas por IA) superan fácil los 10 KB.
+app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Logging

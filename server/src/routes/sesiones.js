@@ -33,7 +33,9 @@ router.post('/',
     body('duracion_minutos').optional().isInt({ min: 1, max: 480 }),
     body('notas_libres').optional().isString(),
     body('notas_estructuradas').optional().isObject(),
-    body('monto').optional().isFloat({ min: 0 })
+    body('monto').optional().isFloat({ min: 0 }),
+    body('turno_id').optional().isUUID(),
+    body('consultorio').optional({ nullable: true }).isInt({ min: 1, max: 3 }).toInt()
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -53,10 +55,14 @@ router.patch('/:id',
   requireAuth,
   [
     param('id').isUUID(),
+    body('fecha').optional().isISO8601(),
+    body('tipo').optional().isIn(['evaluacion', 'tratamiento', 'seguimiento', 'devolucion', 'reunion_interdisciplinaria']),
+    body('duracion_minutos').optional().isInt({ min: 1, max: 480 }),
+    body('consultorio').optional({ nullable: true }).isInt({ min: 1, max: 3 }).toInt(),
     body('notas_libres').optional().isString(),
     body('notas_estructuradas').optional().isObject(),
     body('resumen_ia').optional().isString(),
-    body('monto').optional().isFloat({ min: 0 }),
+    body('monto').optional({ nullable: true }).isFloat({ min: 0 }),
     body('pagado').optional().isBoolean(),
     body('fecha_pago').optional().isISO8601()
   ],

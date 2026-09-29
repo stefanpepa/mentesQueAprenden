@@ -82,16 +82,20 @@ function DisponibilidadConsultorios({ turnos }) {
   const [hover, setHover] = useState(null); // { texto, x, y } | null
 
   const segmentosPorConsultorio = useMemo(() => {
-    const map = {};
+    const map = { sin: [] };
     CONSULTORIOS.forEach(n => { map[n] = []; });
     (turnos || []).forEach(t => {
-      if (t.estado === 'cancelado' || !CONSULTORIOS.includes(t.consultorio)) return;
+      if (t.estado === 'cancelado') return;
+      // Sesiones sin consultorio asignado: no ocupan sala, pero se muestran en
+      // una fila aparte para que no parezca un día vacío.
+      const fila = CONSULTORIOS.includes(t.consultorio) ? t.consultorio : (t.es_sesion ? 'sin' : null);
+      if (!fila) return;
       const inicio = parseISO(t.fecha_inicio);
       const fin = parseISO(t.fecha_fin);
       const minInicio = Math.max(0, (inicio.getHours() * 60 + inicio.getMinutes()) - HORA_INICIO_FRANJA * 60);
       const minFin = Math.min(totalMin, (fin.getHours() * 60 + fin.getMinutes()) - HORA_INICIO_FRANJA * 60);
       if (minFin <= minInicio) return;
-      map[t.consultorio].push({
+      map[fila].push({
         left: (minInicio / totalMin) * 100,
         width: ((minFin - minInicio) / totalMin) * 100,
         etiqueta: `${format(inicio, 'HH:mm')} a ${format(fin, 'HH:mm')}`
@@ -100,29 +104,41 @@ function DisponibilidadConsultorios({ turnos }) {
     return map;
   }, [turnos, totalMin]);
 
+  const filas = segmentosPorConsultorio.sin.length ? [...CONSULTORIOS, 'sin'] : CONSULTORIOS;
+
   return (
     <div className="flex flex-col gap-2">
-      {CONSULTORIOS.map(n => (
-        <div key={n} className="flex items-center gap-2.5">
-          <span className="text-[10px] font-semibold text-gray-500 w-14 flex-shrink-0">Consult. {n}</span>
-          <div className="relative flex-1 h-3 bg-green-100 rounded-full overflow-hidden shadow-inner">
-            {segmentosPorConsultorio[n].map((seg, i) => (
-              <div
-                key={i}
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const margen = 95;
-                  const x = Math.min(Math.max(rect.left + rect.width / 2, margen), window.innerWidth - margen);
-                  setHover({ texto: `Consultorio ${n} · ${seg.etiqueta}`, x, y: rect.top });
-                }}
-                onMouseLeave={() => setHover(null)}
-                className="absolute top-0 bottom-0 bg-gradient-to-r from-red-400 to-red-500 cursor-help shadow-sm hover:brightness-110 transition-[filter,transform] duration-150 origin-left animate-[crecer_0.35s_ease-out]"
-                style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
-              />
-            ))}
+      {filas.map(n => {
+        const sinConsultorio = n === 'sin';
+        return (
+          <div key={n} className="flex items-center gap-2.5">
+            <span className={`text-[10px] font-semibold w-14 flex-shrink-0 ${sinConsultorio ? 'text-amber-600' : 'text-gray-500'}`}>
+              {sinConsultorio ? 'Sin consult.' : `Consult. ${n}`}
+            </span>
+            <div className={`relative flex-1 h-3 rounded-full overflow-hidden shadow-inner ${sinConsultorio ? 'bg-amber-50' : 'bg-green-100'}`}>
+              {segmentosPorConsultorio[n].map((seg, i) => (
+                <div
+                  key={i}
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const margen = sinConsultorio ? 180 : 95;
+                    const x = Math.min(Math.max(rect.left + rect.width / 2, margen), window.innerWidth - margen);
+                    const texto = sinConsultorio
+                      ? `Sesión sin consultorio · ${seg.etiqueta} · editala para asignarle uno`
+                      : `Consultorio ${n} · ${seg.etiqueta}`;
+                    setHover({ texto, x, y: rect.top });
+                  }}
+                  onMouseLeave={() => setHover(null)}
+                  className={`absolute top-0 bottom-0 bg-gradient-to-r cursor-help shadow-sm hover:brightness-110 transition-[filter,transform] duration-150 origin-left animate-[crecer_0.35s_ease-out] ${
+                    sinConsultorio ? 'from-amber-300 to-amber-400' : 'from-red-400 to-red-500'
+                  }`}
+                  style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {hover && <TooltipConsultorio hover={hover} />}
     </div>
@@ -220,7 +236,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, consultoriosHoy, onOp
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{t.tipo} · Consultorio {t.consultorio}</p>
+                <p className="text-xs text-gray-500 truncate">{t.tipo} · {t.es_sesion ? 'Sesión registrada' : `Consultorio ${t.consultorio}`}</p>
               </div>
             </div>
           ))}
@@ -257,24 +273,38 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, consultoriosHoy, onOp
             {diasDelMes.map((dia, i) => {
               if (!dia) return <div key={`empty-${i}`} />;
               const seleccionado = diaSeleccionado?.key === dia.key;
+              const tieneTurnos = dia.turnos.length > 0;
               return (
                 <div
                   key={dia.key}
                   onClick={(e) => { stop(e); setDiaSeleccionado(dia); }}
                   className={`border rounded-lg p-1 cursor-pointer transition-all overflow-hidden ${
-                    seleccionado ? 'border-primary-500 bg-primary-50' : dia.esHoy ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-gray-50 hover:border-primary-300'
+                    seleccionado ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-200'
+                      : dia.esHoy ? 'border-teal-400 bg-teal-50'
+                      : tieneTurnos ? 'border-primary-300 bg-primary-50 hover:border-primary-500'
+                      : 'border-gray-200 bg-gray-50 hover:border-primary-300'
                   }`}
                 >
-                  <div className={`text-xs font-semibold ${dia.esHoy ? 'text-teal-600' : dia.esDomingo ? 'text-orange-400' : 'text-gray-900'}`}>
-                    {dia.dia}
+                  <div className="flex items-start justify-between gap-1">
+                    <div className={`text-xs font-semibold ${dia.esHoy ? 'text-teal-600' : dia.esDomingo ? 'text-orange-400' : 'text-gray-900'}`}>
+                      {dia.dia}
+                    </div>
+                    {tieneTurnos && (
+                      <span
+                        title={`${dia.turnos.length} ${dia.turnos.length === 1 ? 'sesión' : 'sesiones'}`}
+                        className="flex-shrink-0 min-w-[16px] h-4 px-1 rounded-full bg-primary-600 text-white text-[9px] font-bold flex items-center justify-center"
+                      >
+                        {dia.turnos.length}
+                      </span>
+                    )}
                   </div>
-                  {dia.turnos.length > 0 && (
-                    <div className="text-[10px] text-gray-500 mt-0.5 flex flex-col gap-0.5">
-                      <div className="px-1 bg-gray-100 rounded truncate">
+                  {tieneTurnos && (
+                    <div className="text-[10px] mt-0.5 flex flex-col gap-0.5">
+                      <div className="px-1 bg-primary-100 text-primary-800 font-medium rounded truncate">
                         {dia.turnos[0].paciente ? dia.turnos[0].paciente.apellido : '—'}
                       </div>
                       {dia.turnos.length > 1 && (
-                        <div className="text-gray-400 font-semibold">+{dia.turnos.length - 1}</div>
+                        <div className="text-primary-500 font-semibold">+{dia.turnos.length - 1}</div>
                       )}
                     </div>
                   )}
@@ -302,7 +332,7 @@ function AgendaCard({ grow, expanded, onToggle, turnosHoy, consultoriosHoy, onOp
                   <div className="text-xs font-medium text-gray-900 mt-0.5">
                     {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : 'Sin paciente'}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{t.tipo} · Consultorio {t.consultorio}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{t.tipo} · {t.es_sesion ? 'Sesión registrada' : `Consultorio ${t.consultorio}`}</div>
                 </div>
               ))}
             </div>

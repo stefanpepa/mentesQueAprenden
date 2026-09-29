@@ -25,17 +25,55 @@ export default function SesionDetallePage() {
   const [notasLibres, setNotasLibres] = useState(null);
   const [modalVersiones, setModalVersiones] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [datosEdit, setDatosEdit] = useState(null);
 
   const { data: sesion, isLoading } = useQuery({
     queryKey: ['sesion', id],
     queryFn: () => api.get(`/sesiones/${id}`).then(r => r.data)
   });
 
+  // Si se navega de una sesión a otra sin desmontar la página, no arrastrar
+  // el borrador de la anterior (se guardaría encima de la nueva).
   useEffect(() => {
-    if (sesion && notasLibres === null) {
-      setNotasLibres(sesion.notas_libres || '');
+    setEditando(false);
+    setNotasLibres(null);
+  }, [id]);
+
+  const valoresOriginales = (s) => ({
+    fecha: format(new Date(s.fecha), "yyyy-MM-dd'T'HH:mm"),
+    tipo: s.tipo,
+    duracion_minutos: String(s.duracion_minutos || 50),
+    consultorio: s.consultorio == null ? '' : String(s.consultorio),
+    monto: s.monto == null ? '' : String(s.monto)
+  });
+
+  const iniciarEdicion = () => {
+    setDatosEdit(valoresOriginales(sesion));
+    setNotasLibres(sesion.notas_libres || '');
+    setEditando(true);
+  };
+
+  // Solo se mandan los campos que el usuario cambió: si no, reenviar la fecha
+  // sin tocarla movería igual el turno vinculado en la agenda.
+  const guardarCambios = () => {
+    const original = valoresOriginales(sesion);
+    const cambios = {};
+    if (datosEdit.fecha !== original.fecha) cambios.fecha = new Date(datosEdit.fecha).toISOString();
+    if (datosEdit.tipo !== original.tipo) cambios.tipo = datosEdit.tipo;
+    if (String(datosEdit.duracion_minutos) !== original.duracion_minutos) cambios.duracion_minutos = Number(datosEdit.duracion_minutos);
+    if (datosEdit.consultorio !== original.consultorio) cambios.consultorio = datosEdit.consultorio ? Number(datosEdit.consultorio) : null;
+    if (!sesion.pagado && String(datosEdit.monto) !== original.monto) {
+      cambios.monto = datosEdit.monto === '' ? null : Number(datosEdit.monto);
     }
-  }, [sesion]);
+    if (notasLibres !== (sesion.notas_libres || '')) cambios.notas_libres = notasLibres;
+
+    if (Object.keys(cambios).length === 0) {
+      setEditando(false);
+      toast.info('No hubo cambios para guardar');
+      return;
+    }
+    guardarMutation.mutate(cambios);
+  };
 
   const { data: versiones } = useQuery({
     queryKey: ['sesion-versiones', id],
@@ -47,14 +85,20 @@ export default function SesionDetallePage() {
     mutationFn: (data) => api.patch(`/sesiones/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sesion', id] });
+      // La fecha/duración de la sesión puede haber movido un turno vinculado
+      // (ver SesionService.actualizar) — invalidamos también el historial del
+      // paciente y todo lo relacionado a turnos/agenda para que no queden
+      // pantallas mostrando la fecha vieja.
+      queryClient.invalidateQueries({ queryKey: ['paciente-sesiones', sesion?.paciente_id] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).includes('turno') });
       setEditando(false);
-      toast.success('Notas guardadas');
+      toast.success('Cambios guardados');
     },
-    onError: () => toast.error('Error al guardar las notas')
+    onError: (err) => toast.error(err.response?.data?.error || 'Error al guardar los cambios')
   });
 
   const resumirMutation = useMutation({
-    mutationFn: () => api.post('/ia/resumir-sesion', { sesion_id: id, notas_libres: notasLibres }),
+    mutationFn: () => api.post('/ia/resumir-sesion', { sesion_id: id, notas_libres: sesion.notas_libres }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sesion', id] });
       toast.success('Resumen generado');
@@ -66,6 +110,7 @@ export default function SesionDetallePage() {
     mutationFn: (data) => api.post('/pagos', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sesion', id] });
+      queryClient.invalidateQueries({ queryKey: ['paciente-sesiones', sesion?.paciente_id] });
       toast.success('Pago registrado');
     },
     onError: () => toast.error('Error al registrar pago')
@@ -88,12 +133,12 @@ export default function SesionDetallePage() {
             {format(new Date(sesion.fecha), "d 'de' MMMM yyyy", { locale: es })}
           </h1>
           <p className="text-sm text-gray-500">
-            {TIPO_LABEL[sesion.tipo]} · {sesion.duracion_minutos} min
+            {TIPO_LABEL[sesion.tipo]} · {sesion.duracion_minutos} min · {sesion.consultorio ? `Consultorio ${sesion.consultorio}` : 'Sin consultorio'}
           </p>
         </div>
         {puedeEditar && (
           <button
-            onClick={() => setEditando(!editando)}
+            onClick={() => editando ? setEditando(false) : iniciarEdicion()}
             className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${editando ? 'bg-gray-100 text-gray-700 border-gray-200' : 'border-primary-200 text-primary-600'}`}
           >
             {editando ? 'Cancelar' : 'Editar'}
@@ -133,6 +178,65 @@ export default function SesionDetallePage() {
 
         {editando ? (
           <>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Fecha y hora</label>
+                <input
+                  type="datetime-local"
+                  value={datosEdit.fecha}
+                  onChange={(e) => setDatosEdit(d => ({ ...d, fecha: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Tipo</label>
+                <select
+                  value={datosEdit.tipo}
+                  onChange={(e) => setDatosEdit(d => ({ ...d, tipo: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {Object.entries(TIPO_LABEL).map(([valor, label]) => (
+                    <option key={valor} value={valor}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Duración (min)</label>
+                <input
+                  type="number"
+                  min={1} max={480}
+                  value={datosEdit.duracion_minutos}
+                  onChange={(e) => setDatosEdit(d => ({ ...d, duracion_minutos: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Consultorio</label>
+                <select
+                  value={datosEdit.consultorio}
+                  onChange={(e) => setDatosEdit(d => ({ ...d, consultorio: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {[1, 2, 3].map(n => <option key={n} value={String(n)}>Consultorio {n}</option>)}
+                  <option value="">Sin consultorio</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Monto ($)</label>
+                <input
+                  type="number"
+                  min={0} step="0.01"
+                  value={datosEdit.monto}
+                  onChange={(e) => setDatosEdit(d => ({ ...d, monto: e.target.value }))}
+                  disabled={sesion.pagado}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                {sesion.pagado && (
+                  <p className="text-[11px] text-gray-400 mt-1">Ya tiene un pago registrado; el monto no se puede cambiar.</p>
+                )}
+              </div>
+            </div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Notas</label>
             <textarea
               value={notasActuales}
               onChange={(e) => setNotasLibres(e.target.value)}
@@ -143,19 +247,19 @@ export default function SesionDetallePage() {
             <IAAssistant
               pacienteId={sesion.paciente_id}
               sesionId={id}
-              tipoSesion={sesion.tipo}
+              tipoSesion={datosEdit.tipo}
               especialidad={profesional?.especialidad}
               notasParciales={notasActuales}
               onAceptar={(texto) => setNotasLibres(texto)}
             />
             <div className="flex gap-2 mt-3">
               <button
-                onClick={() => guardarMutation.mutate({ notas_libres: notasActuales })}
+                onClick={guardarCambios}
                 disabled={guardarMutation.isPending}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium"
               >
                 <Save size={14} />
-                {guardarMutation.isPending ? 'Guardando...' : 'Guardar notas'}
+                {guardarMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </>

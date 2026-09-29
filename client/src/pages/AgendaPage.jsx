@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -21,7 +22,19 @@ const COLORES_ESTADO = {
   realizado: '#6b7280'
 };
 
+const COLOR_SESION = '#8b5cf6';
+const COLOR_OCUPADO = '#9ca3af';
+
 const CONSULTORIOS = [1, 2, 3];
+
+// Referencias estables a nivel de módulo: si estos objetos se recrean en cada
+// render (como estaban antes, definidos inline en el JSX), FullCalendar los
+// interpreta como un cambio real de configuración y reinicializa el
+// calendario, lo que vuelve a disparar datesSet → setRango → re-render →
+// props nuevos otra vez, entrando en un loop infinito ("Maximum update depth
+// exceeded"). Al vivir fuera del componente, son la misma referencia siempre.
+const BUSINESS_HOURS = { daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: '08:00', endTime: '20:00' };
+const EVENT_TIME_FORMAT = { hour: '2-digit', minute: '2-digit', hour12: false };
 
 const TIPO_OPTIONS = [
   { value: 'tratamiento', label: 'Tratamiento' },
@@ -33,6 +46,7 @@ const TIPO_OPTIONS = [
 
 export default function AgendaPage() {
   const { profesional, isAdmin } = useAuthStore();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const calendarRef = useRef(null);
   const [rango, setRango] = useState({ inicio: null, fin: null });
@@ -71,8 +85,7 @@ export default function AgendaPage() {
   const crearMutation = useMutation({
     mutationFn: (data) => api.post('/turnos', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turnos-agenda'] });
-      queryClient.invalidateQueries({ queryKey: ['turnos-hoy'] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).includes('turno') });
       setModalNuevo(false);
       setFormData({ paciente_id: '', tipo: 'tratamiento', notas: '', duracion: 50, profesional_id: '', consultorio: 1 });
       toast.success('Turno creado');
@@ -83,24 +96,27 @@ export default function AgendaPage() {
   const actualizarMutation = useMutation({
     mutationFn: ({ id, ...data }) => api.patch(`/turnos/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turnos-agenda'] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).includes('turno') });
       setModalDetalle(null);
       toast.success('Turno actualizado');
     },
     onError: () => toast.error('Error al actualizar el turno')
   });
 
-  const eventos = (turnos || []).map(t => ({
-    id: t.id,
-    title: t.ocupado
-      ? `Consultorio ${t.consultorio} ocupado`
-      : t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : '(Sin paciente)',
-    start: t.fecha_inicio,
-    end: t.fecha_fin,
-    backgroundColor: t.ocupado ? '#9ca3af' : (COLORES_ESTADO[t.estado] || '#6366f1'),
-    borderColor: t.ocupado ? '#9ca3af' : (COLORES_ESTADO[t.estado] || '#6366f1'),
-    extendedProps: t
-  }));
+  const eventos = useMemo(() => (turnos || []).map(t => {
+    const color = t.ocupado ? COLOR_OCUPADO : t.es_sesion ? COLOR_SESION : (COLORES_ESTADO[t.estado] || '#6366f1');
+    return {
+      id: t.id,
+      title: t.ocupado
+        ? `Consultorio ${t.consultorio} ocupado`
+        : t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : '(Sin paciente)',
+      start: t.fecha_inicio,
+      end: t.fecha_fin,
+      backgroundColor: color,
+      borderColor: color,
+      extendedProps: t
+    };
+  }), [turnos]);
 
   // Consultorios ocupados AHORA MISMO, para el semáforo de disponibilidad.
   const ahora = Date.now();
@@ -118,7 +134,10 @@ export default function AgendaPage() {
   };
 
   const handleEventClick = (info) => {
-    setModalDetalle(info.event.extendedProps);
+    const item = info.event.extendedProps;
+    // Una sesión sin turno no tiene estado de turno que cambiar: se abre la sesión.
+    if (item.es_sesion) navigate(`/sesiones/${item.sesion.id}`);
+    else setModalDetalle(item);
   };
 
   const handleSubmitNuevo = (e) => {
@@ -197,7 +216,11 @@ export default function AgendaPage() {
           </div>
         ))}
         <div className="flex items-center gap-1.5 text-xs text-gray-600">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#9ca3af' }} />
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLOR_SESION }} />
+          Sesión registrada
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLOR_OCUPADO }} />
           Ocupado (otro profesional)
         </div>
       </div>
@@ -229,12 +252,16 @@ export default function AgendaPage() {
           selectMirror
           select={handleDateSelect}
           eventClick={handleEventClick}
-          datesSet={(info) => setRango({ inicio: info.startStr, fin: info.endStr })}
+          datesSet={(info) => setRango(prev =>
+            (prev.inicio === info.startStr && prev.fin === info.endStr)
+              ? prev
+              : { inicio: info.startStr, fin: info.endStr }
+          )}
           height="auto"
           aspectRatio={1.8}
           nowIndicator
-          businessHours={{ daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: '08:00', endTime: '20:00' }}
-          eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+          businessHours={BUSINESS_HOURS}
+          eventTimeFormat={EVENT_TIME_FORMAT}
         />
       </div>
       )}
@@ -399,12 +426,28 @@ export default function AgendaPage() {
                 {/* Acciones */}
                 {modalDetalle.paciente_id && (
                   <div className="flex gap-2 pt-2">
-                    <a
-                      href={`/sesiones/nueva?paciente_id=${modalDetalle.paciente_id}&turno_id=${modalDetalle.id}`}
-                      className="flex-1 text-center py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium"
-                    >
-                      Registrar sesión
-                    </a>
+                    {modalDetalle.sesion?.id ? (
+                      <a
+                        href={`/sesiones/${modalDetalle.sesion.id}`}
+                        className="flex-1 text-center py-2.5 border border-primary-200 text-primary-700 hover:bg-primary-50 rounded-xl text-sm font-medium"
+                      >
+                        Ver sesión registrada
+                      </a>
+                    ) : (
+                      <a
+                        href={`/sesiones/nueva?${new URLSearchParams({
+                          paciente_id: modalDetalle.paciente_id,
+                          turno_id: modalDetalle.id,
+                          fecha: modalDetalle.fecha_inicio,
+                          tipo: modalDetalle.tipo || 'tratamiento',
+                          consultorio: String(modalDetalle.consultorio || 1),
+                          duracion: String(Math.round((new Date(modalDetalle.fecha_fin) - new Date(modalDetalle.fecha_inicio)) / 60000))
+                        })}`}
+                        className="flex-1 text-center py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium"
+                      >
+                        Registrar sesión
+                      </a>
+                    )}
                   </div>
                 )}
               </>

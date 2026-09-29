@@ -3,7 +3,7 @@ class TurnoService {
   // datos, y los de otros profesionales reducidos a "consultorio ocupado"
   // sin paciente ni notas — así se puede armar un calendario compartido
   // sin filtrar datos clínicos ajenos.
-  async listar(db, { fecha_inicio, fecha_fin, profesional_id }, profesionalActualId) {
+  async listar(db, { fecha_inicio, fecha_fin, profesional_id }, profesionalActualId, { incluirSesiones = false } = {}) {
     let q = db
       .from('turnos')
       .select(`
@@ -23,7 +23,7 @@ class TurnoService {
     const { data, error } = await q;
     if (error) throw new Error(error.message);
 
-    return data.map(t => {
+    const turnos = data.map(t => {
       const esPropio = t.profesional?.id === profesionalActualId;
       if (esPropio) return t;
       // Turno ajeno: solo señal de ocupación del consultorio, sin datos clínicos.
@@ -37,6 +37,42 @@ class TurnoService {
         profesional: t.profesional ? { id: t.profesional.id, nombre: t.profesional.nombre, apellido: t.profesional.apellido } : null
       };
     });
+
+    if (!incluirSesiones || (profesional_id && profesional_id !== profesionalActualId)) return turnos;
+
+    const sesiones = await this.sesionesSinTurno(db, profesionalActualId, fecha_inicio, fecha_fin);
+    return [...turnos, ...sesiones].sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+  }
+
+  // Una sesión cargada desde "Nueva sesión" (sin pasar por un turno) no tiene
+  // turno en la agenda, pero igual es un encuentro con el paciente ese día:
+  // se la devuelve con la misma forma que un turno para que la agenda la
+  // muestre. No ocupa consultorio (consultorio null).
+  async sesionesSinTurno(db, profesionalId, desde, hasta) {
+    let q = db
+      .from('sesiones')
+      .select('id, fecha, duracion_minutos, tipo, paciente_id, paciente:pacientes(id, nombre, apellido, telefono), turnos(id, estado)')
+      .eq('profesional_id', profesionalId);
+    if (desde) q = q.gte('fecha', desde);
+    if (hasta) q = q.lte('fecha', hasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    return data
+      .filter(s => !(s.turnos || []).some(t => t.estado !== 'cancelado'))
+      .map(s => ({
+        id: `sesion-${s.id}`,
+        es_sesion: true,
+        fecha_inicio: s.fecha,
+        fecha_fin: new Date(new Date(s.fecha).getTime() + (s.duracion_minutos || 50) * 60000).toISOString(),
+        estado: 'realizado',
+        tipo: s.tipo,
+        consultorio: null,
+        paciente_id: s.paciente_id,
+        paciente: s.paciente,
+        sesion: { id: s.id }
+      }));
   }
 
   async crear(db, profesionalId, body) {

@@ -101,13 +101,7 @@ export default function ChatSidebar() {
 
     const accionLocal = detectarAccionLocal(limpio);
     if (accionLocal) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: accionLocal.name === 'mostrar_formulario_paciente'
-          ? 'Completá los datos del paciente:'
-          : 'Completá los datos del turno:',
-        tool_results: [accionLocal]
-      }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '', tool_results: [accionLocal] }]);
       return;
     }
 
@@ -250,14 +244,16 @@ export default function ChatSidebar() {
                 <div className="w-7 h-7 rounded-full bg-primary-500 flex-shrink-0 flex items-center justify-center text-white text-xs font-semibold">IA</div>
               )}
               <div className={`flex flex-col max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`rounded-xl px-3 py-2.5 text-[13px] leading-relaxed ${
-                    isUser ? 'text-[#2a2a2a] whitespace-pre-wrap' : 'bg-sidebar-bubble border border-sidebar-borderLight text-[#ded9e8]'
-                  }`}
-                  style={isUser ? { background: '#f5c55e' } : undefined}
-                >
-                  {isUser ? msg.content : <MiniMarkdown text={msg.content} />}
-                </div>
+                {msg.content && (
+                  <div
+                    className={`rounded-xl px-3 py-2.5 text-[13px] leading-relaxed ${
+                      isUser ? 'text-[#2a2a2a] whitespace-pre-wrap' : 'bg-sidebar-bubble border border-sidebar-borderLight text-[#ded9e8]'
+                    }`}
+                    style={isUser ? { background: '#f5c55e' } : undefined}
+                  >
+                    {isUser ? msg.content : <MiniMarkdown text={msg.content} />}
+                  </div>
+                )}
                 {msg.tool_results?.map((tr, j) => (
                   <ToolResultCard key={j} name={tr.name} result={tr.result} />
                 ))}

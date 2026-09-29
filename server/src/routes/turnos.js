@@ -13,7 +13,7 @@ function manejarError(res, err, fallback = { status: 500, message: 'Error intern
 // GET /turnos?fecha_inicio=&fecha_fin=&profesional_id=
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const data = await turnoService.listar(getAuthenticatedClient(req), req.query, req.profesional.id);
+    const data = await turnoService.listar(getAuthenticatedClient(req), req.query, req.profesional.id, { incluirSesiones: true });
     res.json(data);
   } catch (err) {
     manejarError(res, err);
